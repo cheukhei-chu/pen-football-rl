@@ -149,14 +149,14 @@ def train_football():
 
     # 4. Run the training process
     # You can use `tune.run` for more advanced experiment tracking or just `config.build().train()` for simplicity.
-    stop_criteria = {"training_iteration": 3000}
+    stop_criteria = {"training_iteration": 100}
 
     tuner = tune.Tuner(
         "PPO",
         param_space=config.to_dict(),
         run_config=ray.air.RunConfig(
             stop=stop_criteria,
-            name="PPO_Football_SelfPlay_Experiment1",
+            name="PPO_Football_SelfPlay_Experiment2",
             checkpoint_config=ray.air.CheckpointConfig(
                 checkpoint_frequency=25, # Save a checkpoint every 25 iterations
                 checkpoint_at_end=True,

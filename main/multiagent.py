@@ -65,47 +65,45 @@ class FootballMultiAgentEnv(MultiAgentEnv):
         return self._get_obs_dict(), {}
 
     def step(self, action_dict):
-        # --- REWARD SHAPING ---
-        # 1. Get distance to ball BEFORE the step
-        old_dist_red = np.hypot(self.game.red['x'] - self.game.ball['x'], self.game.red['y'] - self.game.ball['y'])
-        old_dist_blue = np.hypot(self.game.blue['x'] - self.game.ball['x'], self.game.blue['y'] - self.game.ball['y'])
-
-        # Original action mapping and game step
         action_red = action_dict["player_red"]
         action_blue = action_dict["player_blue"]
         red_keys = {'left': action_red["left"] == 1, 'right': action_red["right"] == 1, 'jump': action_red["jump"] == 1}
         blue_keys = {'left': action_blue["right"] == 1, 'right': action_blue["left"] == 1, 'jump': action_blue["jump"] == 1}
 
-        _, (reward_red, reward_blue), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
+        _, (red_kicked, blue_kicked), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
 
-        # --- NEW, CLEANER REWARD SHAPING ---
-        # Get the state BEFORE the game steps
         red_x, red_y = self.game.red['x'], self.game.red['y']
         blue_x, blue_y = self.game.blue['x'], self.game.blue['y']
         ball_x, ball_y = self.game.ball['x'], self.game.ball['y']
 
+        reward_red, reward_blue = 0, 0
 
-        _, (reward_red, reward_blue), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
+        if ball_y < -40:
+            if ball_x > 210:
+                reward_red += 100
+                reward_blue -= 100
+            elif ball_x < -210:
+                reward_red -= 100
+                reward_blue += 100
 
-        # Give a small reward for moving horizontally in the correct direction
-        shaping_reward_red = 0.0
-        if action_red["right"] == 1 and ball_x > red_x:
-            shaping_reward_red += 10  # Small positive reward for moving right towards the ball
-        if action_red["left"] == 1 and ball_x < red_x:
-            shaping_reward_red += 10  # Small positive reward for moving left towards the ball
-        shaping_reward_red -= abs(ball_y - red_y)
+        # # Give a small reward for moving horizontally in the correct direction
+        # if action_red["right"] == 1 and ball_x > red_x:
+        #     reward_red += 10
+        # if action_red["left"] == 1 and ball_x < red_x:
+        #     reward_red += 10
+        # reward_red -= abs(ball_y - red_y)
 
-        shaping_reward_blue = 0.0
-        # Remember, blue's actions are flipped! 'right' from the policy means move left in the game.
-        if action_blue["right"] == 1 and ball_x < blue_x:
-            shaping_reward_blue += 10
-        if action_blue["left"] == 1 and ball_x > blue_x:
-            shaping_reward_blue += 10
-        shaping_reward_blue -= abs(ball_y - blue_y)
+        # if action_blue["right"] == 1 and ball_x < blue_x:
+        #     reward_blue += 10
+        # if action_blue["left"] == 1 and ball_x > blue_x:
+        #     reward_blue += 10
+        # reward_blue -= abs(ball_y - blue_y)
 
-        reward_red += shaping_reward_red
-        reward_blue += shaping_reward_blue
-        # --- END OF REWARD SHAPING ---
+        # reward_red += red_kicked * 10
+        # reward_blue += blue_kicked * 10
+
+        reward_red -= action_red["jump"] * 1000
+        reward_blue -= action_blue["jump"] * 1000
 
         observations = self._get_obs_dict()
         rewards = {"player_red": float(reward_red), "player_blue": float(reward_blue)}
