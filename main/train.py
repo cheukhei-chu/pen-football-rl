@@ -105,7 +105,7 @@ def train_football():
     register_env("football_v1", lambda config: FootballMultiAgentEnv(**config))
 
     # Define the base directory for Ray results
-    ray_results_dir = os.path.expanduser("~/ray_results")
+    ray_results_dir = os.path.expanduser("/Users/cheukheichu/Desktop/MIT/Junior Fall/6.7920/FinalProject/ray_results")
 
     # Launch TensorBoard pointing to the base results directory
     launch_tensorboard(ray_results_dir)
@@ -149,14 +149,14 @@ def train_football():
 
     # 4. Run the training process
     # You can use `tune.run` for more advanced experiment tracking or just `config.build().train()` for simplicity.
-    stop_criteria = {"training_iteration": 100}
+    stop_criteria = {"training_iteration": 50}
 
     tuner = tune.Tuner(
         "PPO",
         param_space=config.to_dict(),
         run_config=ray.air.RunConfig(
             stop=stop_criteria,
-            name="PPO_Football_SelfPlay_Experiment2",
+            name="PPO_Football_SelfPlay_Experiment3",
             checkpoint_config=ray.air.CheckpointConfig(
                 checkpoint_frequency=25, # Save a checkpoint every 25 iterations
                 checkpoint_at_end=True,

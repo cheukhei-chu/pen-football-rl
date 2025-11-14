@@ -36,6 +36,7 @@ class FootballMultiAgentEnv(MultiAgentEnv):
                 for agent_id in self.possible_agents
             }
         )
+        # x \in (-1, 1), y \in (-151/150, 1), vx \in (-0.5, 0.5), vy \in (-0.5, 0.6)
         self._obs_space_in_preferred_format = True
         self._action_space_in_preferred_format = True
 
