@@ -1,0 +1,325 @@
+import pygame
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+
+# Game Canvas
+BASE_WIDTH, BASE_HEIGHT = 480, 360
+
+# --- Game Constants (in base coordinates) ---
+GROUND_Y = -151
+CEILING_Y = 150
+WALL_X = 230
+TICK_RATE = 30
+
+# --- Colors ---
+COLOR_SKY = (204, 255, 255)
+COLOR_GRASS = (0, 153, 51)
+COLOR_BLACK = (0, 0, 0)
+COLOR_WHITE = (255, 255, 255)
+COLOR_RED = (255, 0, 0)
+COLOR_BLUE = (0, 51, 255)
+
+class FootballGame:
+    """
+    A direct and faithful translation of the Scratch football game's core mechanics.
+    """
+    def __init__(self, screen=None, render_mode='human'):
+        self.screen = screen
+        self.clock = None
+        self.scale = 1
+        self.width = BASE_WIDTH * self.scale
+        self.height = BASE_HEIGHT * self.scale
+        self.render_mode = render_mode
+        self.font = None
+        self.reset()
+
+    def get_font(self):
+        """Gets font object"""
+        return pygame.font.SysFont("consolas", int(40 * self.scale))
+
+    def _s2p(self, x, y):
+        """Converts Scratch coordinates to scaled Pygame screen coordinates."""
+        return int((x * self.scale) + self.width / 2), int(self.height / 2 - (y * self.scale))
+
+    def _reset_round(self):
+        """Resets positions and velocities for a new round (e.g., after a goal)."""
+        self.ball = {'x': 0, 'y': 0, 'vx': 0, 'vy': 0}
+        self.red = {'x': -200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.blue = {'x': 200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+
+    def _get_internal_observation(self):
+        return np.array([
+            self.red['x']/WALL_X, self.red['y']/CEILING_Y, self.red['vx']/20, self.red['vy']/20,
+            self.blue['x']/WALL_X, self.blue['y']/CEILING_Y, self.blue['vx']/20, self.blue['vy']/20,
+            self.ball['x']/WALL_X, self.ball['y']/CEILING_Y, self.ball['vx']/20, self.ball['vy']/20,
+        ], dtype=np.float32)
+
+    def reset(self):
+        """Resets the entire game to its initial state for a new episode."""
+        self._reset_round()
+        self.score_red = 0
+        self.score_blue = 0
+        self.time_steps = 0
+        return self._get_internal_observation()
+
+    def _update_player(self, player, keys):
+        extra_reward = 0
+        is_on_ground = player['y'] <= GROUND_Y
+
+        if player['is_waiting_for_jump_key_release'] and not keys['jump']:
+            player['can_double_jump'] = True
+            player['is_waiting_for_jump_key_release'] = False
+
+        if keys['jump']:
+            if is_on_ground:
+                player['vy'] = 12
+                player['is_waiting_for_jump_key_release'] = True
+            elif player['can_double_jump'] and player['vy'] < 5:
+                player['vy'] = 12
+                player['can_double_jump'] = False
+            else:
+                extra_reward -= 20
+
+        if keys['right']: player['vx'] += 1
+        if keys['left']: player['vx'] -= 1
+
+        player['vy'] -= 1
+        player['x'] += player['vx']
+        player['y'] += player['vy']
+        player['vx'] *= 0.9
+
+        if player['x'] > WALL_X: player['x'], player['vx'] = WALL_X, 0
+        if player['x'] < -WALL_X: player['x'], player['vx'] = -WALL_X, 0
+        if player['y'] > CEILING_Y: player['y'], player['vy'] = CEILING_Y, 0
+        if player['y'] < GROUND_Y:
+            player['y'], player['vy'] = GROUND_Y, 0
+            player['can_double_jump'] = False
+            player['is_waiting_for_jump_key_release'] = False
+
+        return extra_reward
+
+    def _update_ball(self):
+        # Add return values to track collisions
+        red_kicked = False
+        blue_kicked = False
+
+        def process_collision(player):
+            dx = self.ball['x'] - player['x']
+            self.ball['vx'] = (player['vx'] * abs(dx)) / 5 + dx / 5
+            self.ball['vy'] = player['vy'] + 10
+
+        if np.hypot(self.ball['x'] - self.red['x'], self.ball['y'] - self.red['y']) < 20:
+            process_collision(self.red)
+            red_kicked = True # <-- Track collision
+        if np.hypot(self.ball['x'] - self.blue['x'], self.ball['y'] - self.blue['y']) < 20:
+            process_collision(self.blue)
+            blue_kicked = True # <-- Track collision
+
+        self.ball['vy'] -= 1; self.ball['vx'] *= 0.97
+        self.ball['x'] += self.ball['vx']; self.ball['y'] += self.ball['vy']
+
+        if abs(self.ball['x']) > WALL_X: self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
+        if self.ball['y'] < GROUND_Y: self.ball['y'], self.ball['vy'] = GROUND_Y, self.ball['vy'] * -0.7
+        if self.ball['y'] > CEILING_Y: self.ball['y'], self.ball['vy'] = CEILING_Y, self.ball['vy'] * -0.7
+
+        if abs(self.ball['x']) > 205 and self.ball['y'] > -40 and self.ball['y'] + self.ball['vy'] <= -40:
+            self.ball['y'], self.ball['vy'] = -40, 5; self.ball['vx'] = -5 * np.sign(self.ball['x'])
+
+        return red_kicked, blue_kicked
+
+    def step(self, red_keys, blue_keys):
+        # This method now directly accepts the boolean key dictionaries
+        # instead of integer actions.
+        red_extra_reward = self._update_player(self.red, red_keys)
+        blue_extra_reward = self._update_player(self.blue, blue_keys)
+        red_kicked, blue_kicked = self._update_ball()
+
+        reward_red, reward_blue, terminated = red_extra_reward, blue_extra_reward, False
+
+        if self.ball['y'] < -40:
+            if self.ball['x'] > 210:
+                self.score_red += 1
+                reward_red, reward_blue = 100, -100
+                self._reset_round()
+            elif self.ball['x'] < -210:
+                self.score_blue += 1
+                reward_red, reward_blue = -100, 100
+                self._reset_round()
+
+        if self.score_red >= 10 or self.score_blue >= 10:
+            terminated = True
+
+        self.time_steps += 1
+        truncated = self.time_steps >= 1800
+
+        if red_kicked: reward_red += 50
+        if blue_kicked: reward_blue += 50
+
+        return self._get_internal_observation(), (reward_red, reward_blue), terminated, truncated, {}
+
+    def render(self):
+        if self.render_mode != 'human':
+            return
+
+        if self.screen is None:
+            # First-time setup
+            pygame.init()
+            pygame.font.init()
+            pygame.display.set_caption("Football RL")
+            self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+            self.clock = pygame.time.Clock()
+
+        self.screen.fill(COLOR_SKY)
+
+        # Goals (drawn first)
+        for side in [-1, 1]:
+            color = COLOR_RED if side == -1 else COLOR_BLUE
+            x_post = side * 230
+
+            # --- Outline ---
+            # Vertical post as a rectangle
+            post_rect_outline_tl = self._s2p(x_post - 10, -50)
+            pygame.draw.rect(self.screen, COLOR_BLACK, (post_rect_outline_tl[0], post_rect_outline_tl[1], int(20 * self.scale), int(self.scale * 120)))
+            # Horizontal crossbar as a rectangle
+            crossbar_x_start = x_post if side == 1 else x_post - 10
+            crossbar_rect_outline_tl = self._s2p(crossbar_x_start, -40)
+            pygame.draw.rect(self.screen, COLOR_BLACK, (crossbar_rect_outline_tl[0], crossbar_rect_outline_tl[1], int(10 * self.scale), int(20 * self.scale)))
+            # Corner circle to smooth the join
+            pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(x_post, -50), int(10 * self.scale))
+
+            # --- Fill ---
+            # Vertical fill
+            post_rect_fill_tl = self._s2p(x_post - 8, -50)
+            pygame.draw.rect(self.screen, color, (post_rect_fill_tl[0], post_rect_fill_tl[1], int(16 * self.scale), int(120 * self.scale)))
+            # Horizontal fill
+            crossbar_x_fill_start = x_post if side == 1 else x_post - 8
+            crossbar_rect_fill_tl = self._s2p(crossbar_x_fill_start, -42)
+            pygame.draw.rect(self.screen, color, (crossbar_rect_fill_tl[0], crossbar_rect_fill_tl[1], int(8 * self.scale), int(16 * self.scale)))
+            # Corner circle fill
+            pygame.draw.circle(self.screen, color, self._s2p(x_post, -50), int(8 * self.scale))
+
+        # Ground (drawn over goal bottoms)
+        pygame.draw.line(self.screen, COLOR_BLACK, self._s2p(-240, -170), self._s2p(240, -170), int(20 * self.scale))
+        pygame.draw.line(self.screen, COLOR_GRASS, self._s2p(-240, -170), self._s2p(240, -170), int(16 * self.scale))
+
+        # Accurate Boundary
+        pygame.draw.rect(self.screen, COLOR_BLACK, (0, 0, self.width, self.height), int(2 * self.scale))
+
+        # Players and ball
+        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.red['x'], self.red['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_RED, self._s2p(self.red['x'], self.red['y']), int(8 * self.scale))
+        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.blue['x'], self.blue['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_BLUE, self._s2p(self.blue['x'], self.blue['y']), int(8 * self.scale))
+        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.ball['x'], self.ball['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_WHITE, self._s2p(self.ball['x'], self.ball['y']), int(8 * self.scale))
+
+        score_text = self.get_font().render(f"{self.score_red} - {self.score_blue}", True, COLOR_BLACK)
+        self.screen.blit(score_text, (self.width/2 - score_text.get_width()/2, int(10 * self.scale)))
+
+        pygame.display.flip()
+
+    def close(self):
+        """Shuts down the Pygame instance if it was created."""
+        if self.screen is not None:
+            pygame.quit()
+            self.screen = None # Ensure it can be re-initialized if needed
+
+if __name__ == "__main__":
+    pygame.init()
+    screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
+    pygame.display.set_caption("Pen Football - Two Player")
+    clock = pygame.time.Clock()
+    game = FootballGame(screen)
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: running = False
+            if event.type == pygame.VIDEORESIZE:
+                new_scale = event.w / BASE_WIDTH
+                new_width = BASE_WIDTH * new_scale
+                new_height = BASE_HEIGHT * new_scale
+                screen = pygame.display.set_mode((new_width, new_height), pygame.RESIZABLE)
+                game.scale, game.width, game.height = new_scale, new_width, new_height
+        keys = pygame.key.get_pressed()
+        red_keys = { 'jump': keys[pygame.K_w], 'left': keys[pygame.K_a], 'right': keys[pygame.K_d] }
+        blue_keys = { 'jump': keys[pygame.K_UP], 'left': keys[pygame.K_LEFT], 'right': keys[pygame.K_RIGHT] }
+        game._update_player(game.red, red_keys); game._update_player(game.blue, blue_keys); game._update_ball()
+        if game.ball['y'] < -50:
+            if game.ball['x'] > 210: game.score_red += 1; game._reset_round()
+            elif game.ball['x'] < -210: game.score_blue += 1; game._reset_round()
+        if game.score_red >= 10 or game.score_blue >= 10:
+            print(f"Game Over! Final Score: Red {game.score_red} - Blue {game.score_blue}")
+            game.reset()
+        game.render()
+        clock.tick(TICK_RATE)
+    pygame.quit()
+
+class FootballEnv(gym.Env):
+    metadata = {'render_modes': ['human', 'rgb_array'], 'render_fps': TICK_RATE}
+
+    def __init__(self, render_mode=None):
+        super().__init__()
+        self.render_mode = render_mode
+        self.screen = None
+        self.clock = None
+
+        if self.render_mode == 'human':
+            pygame.init()
+            pygame.display.set_caption("Football RL Environment")
+            self.screen = pygame.display.set_mode((BASE_WIDTH * 2, BASE_HEIGHT * 2), pygame.RESIZABLE)
+            self.clock = pygame.time.Clock()
+
+        # The game instance now correctly takes the screen object
+        self.game = FootballGame(screen=self.screen, render_mode=self.render_mode)
+
+        # CORRECTED ACTION SPACE: Each player has 3 binary actions (left, right, jump)
+        # An action is a tuple of two arrays, e.g., (array([1,0,1]), array([0,1,0]))
+        self.action_space = spaces.Tuple((
+            spaces.MultiBinary(3),  # Red Player: [left, right, jump]
+            spaces.MultiBinary(3)   # Blue Player: [left, right, jump]
+        ))
+
+        self.observation_space = spaces.Box(low=-1.5, high=1.5, shape=(12,), dtype=np.float32)
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+        observation = self.game.reset()
+        return observation, {}
+
+    def step(self, action):
+        # Unpack the tuple of actions for each player
+        action_red, action_blue = action
+
+        # Map the MultiBinary actions to the keys dictionary the game expects
+        red_keys = { 'left': action_red[0] == 1, 'right': action_red[1] == 1, 'jump': action_red[2] == 1 }
+        blue_keys = { 'left': action_blue[0] == 1, 'right': action_blue[1] == 1, 'jump': action_blue[2] == 1 }
+
+        # The game's step function now takes these dictionaries
+        observation, reward, terminated, truncated, info = self.game.step(red_keys, blue_keys)
+        return observation, reward, terminated, truncated, info
+
+    def render(self):
+        if self.render_mode == 'human':
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.close(); return
+                if event.type == pygame.VIDEORESIZE:
+                    new_scale = event.w / BASE_WIDTH
+                    new_width, new_height = event.w, int(event.w / (BASE_WIDTH/BASE_HEIGHT))
+                    self.screen = pygame.display.set_mode((new_width, new_height), pygame.RESIZABLE)
+                    self.game.scale, self.game.width, self.game.height = new_scale, new_width, new_height
+
+            self.game.render()
+            self.clock.tick(self.metadata["render_fps"])
+
+        elif self.render_mode == "rgb_array":
+            # Temporarily attach a surface for rendering
+            temp_surface = pygame.Surface((self.game.width, self.game.height))
+            original_screen = self.game.screen
+            self.game.screen = temp_surface
+            self.game.render()
+            self.game.screen = original_screen
+            return np.transpose(pygame.surfarray.array3d(temp_surface), (1, 0, 2))
+
+    def close(self):
+        if self.screen is not None:
+            pygame.quit()
+            self.screen = None
