@@ -120,10 +120,10 @@ def train_football():
             rollout_fragment_length='auto'
         )
         .training(
-            gamma=0.99,
-            lr=5e-5,
+            gamma=0, # 0.99
+            lr=1e-2, # 5e-5
             train_batch_size=4000,
-            model={"fcnet_hiddens": [256, 256]},
+            model={"fcnet_hiddens": [256, 256], "vf_share_layers": False},
         )
         .multi_agent(
             # We have two agents, but they will both share the same policy.
@@ -149,16 +149,16 @@ def train_football():
 
     # 4. Run the training process
     # You can use `tune.run` for more advanced experiment tracking or just `config.build().train()` for simplicity.
-    stop_criteria = {"training_iteration": 50}
+    stop_criteria = {"training_iteration": 25}
 
     tuner = tune.Tuner(
         "PPO",
         param_space=config.to_dict(),
         run_config=ray.air.RunConfig(
             stop=stop_criteria,
-            name="PPO_Football_SelfPlay_Experiment3",
+            name="PPO_Football_SelfPlay_Experiment7",
             checkpoint_config=ray.air.CheckpointConfig(
-                checkpoint_frequency=25, # Save a checkpoint every 25 iterations
+                checkpoint_frequency=25,
                 checkpoint_at_end=True,
             ),
         ),

@@ -16,7 +16,7 @@ from pen_football import TICK_RATE
 
 # Path to your checkpoint file
 # CHECKPOINT_PATH = "/Users/cheukheichu/ray_results/PPO_Football_SelfPlay_Experiment1/PPO_football_v1_963ee_00000_0_2025-09-25_04-21-08/checkpoint_000119"
-CHECKPOINT_PATH = "/Users/cheukheichu/ray_results/PPO_Football_SelfPlay_Experiment3/PPO_football_v1_dbfd7_00000_0_2025-11-13_21-37-27/checkpoint_000001"
+CHECKPOINT_PATH = "/Users/cheukheichu/ray_results/PPO_Football_SelfPlay_Experiment7/PPO_football_v1_a9420_00000_0_2025-11-13_23-52-02/checkpoint_000000"
 
 ray.init()
 register_env("football_v1", lambda config: FootballMultiAgentEnv(config))
@@ -50,12 +50,12 @@ while not terminated and not truncated:
     jump_logits = action_logits_tensor[:, 4:6]   # Shape: (2, 2)
 
     # 3. Create probability distributions from the logits and sample actions for the batch.
-    # sampled_left_actions = torch.distributions.Categorical(logits=left_logits).sample()    # Shape: (2,)
-    # sampled_right_actions = torch.distributions.Categorical(logits=right_logits).sample()   # Shape: (2,)
-    # sampled_jump_actions = torch.distributions.Categorical(logits=jump_logits).sample()    # Shape: (2,)
-    sampled_left_actions = torch.argmax(left_logits, dim=-1)    # Shape: (2,)
-    sampled_right_actions = torch.argmax(right_logits, dim=-1)   # Shape: (2,)
-    sampled_jump_actions = torch.argmax(jump_logits, dim=-1)     # Shape: (2,)
+    sampled_left_actions = torch.distributions.Categorical(logits=left_logits).sample()    # Shape: (2,)
+    sampled_right_actions = torch.distributions.Categorical(logits=right_logits).sample()   # Shape: (2,)
+    sampled_jump_actions = torch.distributions.Categorical(logits=jump_logits).sample()    # Shape: (2,)
+    # sampled_left_actions = torch.argmax(left_logits, dim=-1)    # Shape: (2,)
+    # sampled_right_actions = torch.argmax(right_logits, dim=-1)   # Shape: (2,)
+    # sampled_jump_actions = torch.argmax(jump_logits, dim=-1)     # Shape: (2,)
 
     # 4. Reconstruct the action dictionary for the environment by picking the
     #    i-th action for the i-th agent.

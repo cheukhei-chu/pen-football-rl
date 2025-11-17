@@ -64,6 +64,7 @@ class FootballGame:
         return self._get_internal_observation()
 
     def _update_player(self, player, keys):
+        jump_failed = False
         is_on_ground = player['y'] <= GROUND_Y
 
         if player['is_waiting_for_jump_key_release'] and not keys['jump']:
@@ -77,6 +78,8 @@ class FootballGame:
             elif player['can_double_jump'] and player['vy'] < 5:
                 player['vy'] = 12
                 player['can_double_jump'] = False
+            else:
+                jump_failed = True
 
         if keys['right']: player['vx'] += 1
         if keys['left']: player['vx'] -= 1
@@ -94,7 +97,7 @@ class FootballGame:
             player['can_double_jump'] = False
             player['is_waiting_for_jump_key_release'] = False
 
-        return
+        return jump_failed
 
     def _update_ball(self):
         red_kicked = False
@@ -125,16 +128,19 @@ class FootballGame:
         return red_kicked, blue_kicked
 
     def step(self, red_keys, blue_keys):
-        self._update_player(self.red, red_keys)
-        self._update_player(self.blue, blue_keys)
+        red_jump_failed = self._update_player(self.red, red_keys)
+        blue_jump_failed = self._update_player(self.blue, blue_keys)
         red_kicked, blue_kicked = self._update_ball()
+        red_scored, blue_scored = False, False
 
         if self.ball['y'] < -40:
             if self.ball['x'] > 210:
                 self.score_red += 1
+                red_scored = True
                 self._reset_round()
             elif self.ball['x'] < -210:
                 self.score_blue += 1
+                blue_scored = True
                 self._reset_round()
 
         terminated = (self.score_red >= 10 or self.score_blue >= 10)
@@ -142,7 +148,7 @@ class FootballGame:
         self.time_steps += 1
         truncated = self.time_steps >= 1800
 
-        return self._get_internal_observation(), (red_kicked, blue_kicked), terminated, truncated, {}
+        return self._get_internal_observation(), (red_kicked, blue_kicked, red_scored, blue_scored, red_jump_failed, blue_jump_failed), terminated, truncated, {}
 
     def render(self):
         if self.render_mode != 'human':
