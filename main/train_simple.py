@@ -37,7 +37,7 @@ class FootballPolicy(nn.Module):
             for k, v in logits.items()
         }
 
-def train(num_episodes=2000, lr=1e-4, gamma=0.99):
+def train(name, num_episodes=2000, lr=1e-4, gamma=0.99):
     env = FootballMultiAgentEnv()
 
     policy_red = FootballPolicy()
@@ -46,8 +46,11 @@ def train(num_episodes=2000, lr=1e-4, gamma=0.99):
     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
     opt_blue = optim.Adam(policy_blue.parameters(), lr=lr)
 
-    checkpoint_dir = "./checkpoints"
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    checkpoints_path = os.path.join(parent_dir, "checkpoints")
+    checkpoint_dir = os.path.join(checkpoints_path, name)
+    os.makedirs(checkpoint_dir, exist_ok=False)
 
     for episode in range(num_episodes):
         obs, _ = env.reset()
@@ -232,5 +235,5 @@ def evaluate_from_checkpoint(checkpoint_path, episodes=10, render=False):
 
 # ---- Run training and evaluation ----
 if __name__ == "__main__":
-    train(num_episodes=10000)
+    train(name=None, num_episodes=10000)
 # evaluate(policy_red, policy_blue, episodes=5, render=True)
