@@ -75,8 +75,6 @@ class FootballMultiAgentEnv(gym.Env):
             "right": a_red["right"] == 1,
             "jump": a_red["jump"] == 1
         }
-
-        # blue is mirrored
         blue_keys = {
             "left": a_blue["right"] == 1,
             "right": a_blue["left"] == 1,
@@ -85,7 +83,44 @@ class FootballMultiAgentEnv(gym.Env):
 
         _, (red_state, blue_state), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
 
+        obs = self._get_obs()
 
+        reports = self.comp_reports(red_state, blue_state)
+        rewards = self.comp_rewards(red_state, blue_state)
+
+        terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
+        truncateds = {"__all__": truncated}
+
+        return obs, rewards, terminateds, truncateds, {"reports": reports}
+
+    # -----------------------------------------------------
+
+    def render(self):
+        self.game.render()
+
+    def close(self):
+        self.game.close()
+
+    def comp_reports(self, red_state: dict, blue_state: dict):
+        score_red = (red_state['scored'] - blue_state['scored']) * 1
+        score_blue = (blue_state['scored'] - red_state['scored']) * 1
+
+        move_red = (red_state['move_towards_ball']) * 1
+        move_blue = (blue_state['move_towards_ball']) * 1
+
+        kick_red = red_state['kicked'] * 1
+        kick_blue = blue_state['kicked'] * 1
+
+        jump_red = red_state['jump_failed'] * 1
+        jump_blue = blue_state['jump_failed'] * 1
+
+        reports = {
+            "player_red": [float(score_red), float(move_red), float(kick_red), float(jump_red)],
+            "player_blue": [float(score_blue), float(move_blue), float(kick_blue), float(jump_blue)]
+        }
+        return reports
+
+    def comp_rewards(self, red_state: dict, blue_state: dict):
         score_red = (red_state['scored'] - blue_state['scored']) * 100
         score_blue = (blue_state['scored'] - red_state['scored']) * 100
 
@@ -98,23 +133,8 @@ class FootballMultiAgentEnv(gym.Env):
         jump_red = red_state['jump_failed'] * (-1)
         jump_blue = blue_state['jump_failed'] * (-1)
 
-        obs = self._get_obs()
-
         rewards = {
-            "player_red": [float(score_red),float(move_red),float(kick_red),float(jump_red)],
-            "player_blue": [float(score_blue),float(move_blue),float(kick_blue),float(jump_blue)]
+            "player_red": score_red + move_red + kick_red + jump_red,
+            "player_blue": score_blue + move_blue + kick_blue + jump_blue
         }
-
-        # terminateds = {"__all__": terminated}
-        terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
-        truncateds = {"__all__": truncated}
-
-        return obs, rewards, terminateds, truncateds, {}
-
-    # -----------------------------------------------------
-
-    def render(self):
-        self.game.render()
-
-    def close(self):
-        self.game.close()
+        return rewards

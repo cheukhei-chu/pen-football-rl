@@ -11,20 +11,20 @@ from multiagent import FootballMultiAgentEnv
 from policy import *
 
 def compute_returns(rewards_list, gamma=0.99):
-    G = np.zeros(2)
+    G = 0
     returns = []
     for r in reversed(rewards_list):
-        G = np.array(r)[[0, 1]] + gamma * G
+        G = r + gamma * G
         returns.append(G)
     returns.reverse()
-    returns = np.stack(returns)
+    returns = np.array(returns)
     return torch.tensor(returns, dtype=torch.float32)
 
 def sim_episode(env, policy_red, policy_blue, gamma=0.99):
     obs, _ = env.reset()
 
-    logps_red, rewards_red = [], []
-    logps_blue, rewards_blue = [], []
+    logps_red, rewards_red, reports_red = [], [], []
+    logps_blue, rewards_blue, reports_blue = [], [], []
 
     done = False
 
@@ -32,7 +32,7 @@ def sim_episode(env, policy_red, policy_blue, gamma=0.99):
         a_red  = policy_red.sample_action(obs["player_red"])
         a_blue = policy_blue.sample_action(obs["player_blue"])
 
-        next_obs, rewards, terminated, truncated, _ = env.step(
+        next_obs, rewards, terminated, truncated, info = env.step(
             {"player_red": a_red, "player_blue": a_blue}
         )
         done = terminated["__all__"] or truncated["__all__"]
@@ -48,12 +48,15 @@ def sim_episode(env, policy_red, policy_blue, gamma=0.99):
         rewards_red.append(rewards["player_red"])
         rewards_blue.append(rewards["player_blue"])
 
+        reports_red.append(info["reports"]["player_red"])
+        reports_blue.append(info["reports"]["player_blue"])
+
         obs = next_obs
 
     returns_red = compute_returns(rewards_red, gamma=gamma)
     loss_red = -(torch.stack(logps_red) * returns_red).mean()
 
-    return loss_red, np.array(rewards_red), np.array(rewards_blue)
+    return loss_red, (np.array(rewards_red), np.array(rewards_blue)), (np.array(reports_red), np.array(reports_blue))
 
 def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
     opponent_pool = []
@@ -86,14 +89,14 @@ def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99,
     for episode in range(num_episodes):
         policy_blue = select_opponent()
 
-        loss_red, rewards_red, rewards_blue = sim_episode(env, policy_red, policy_blue, gamma=gamma)
+        loss_red, (rewards_red, rewards_blue), (reports_red, reports_blue) = sim_episode(env, policy_red, policy_blue, gamma=gamma)
 
         opt_red.zero_grad()
         loss_red.backward()
         opt_red.step()
 
         if episode % print_episodes == 0:
-            print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[:, 0]):.1f}, blue {np.sum(rewards_blue[:, 0]):.1f}, move red {np.sum(rewards_red[:, 1]):.1f}, blue {np.sum(rewards_blue[:, 1]):.1f}, kick red {np.sum(rewards_red[:, 2]):.1f}, blue {np.sum(rewards_blue[:, 2]):.1f}, jump red {np.sum(rewards_red[:, 3]):.1f}, blue {np.sum(rewards_blue[:, 3]):.1f}")
+            print(f"Episode {episode}: loss red {loss_red:.1f} rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(reports_red[:, 0]):.1f}, blue {np.sum(reports_blue[:, 0]):.1f}, move red {np.sum(reports_red[:, 1]):.1f}, blue {np.sum(reports_blue[:, 1]):.1f}, kick red {np.sum(reports_red[:, 2]):.1f}, blue {np.sum(reports_blue[:, 2]):.1f}, jump red {np.sum(reports_red[:, 3]):.1f}, blue {np.sum(reports_blue[:, 3]):.1f}")
 
         if (episode + 1) % save_episodes == 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
@@ -113,7 +116,7 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
     Loads policies from a checkpoint file and evaluates them.
     """
     assert os.path.exists(checkpoint_path1), f"Error: Checkpoint file not found at {checkpoint_path1}"
-    
+
 
     # Step 1: Instantiate new policy models
     policy_red = MLPPolicy()
@@ -129,11 +132,9 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
     # Step 2: Load the checkpoint dictionary
     print(f"Loading checkpoint from {checkpoint_path1} and {checkpoint_path2}...")
     checkpoint = torch.load(checkpoint_path1)
-    
+
     # Step 3: Load the saved weights into the models
     policy_red.load_state_dict(checkpoint['policy_state_dict'])
-
-    
 
     # Step 4: Set the models to evaluation mode
     policy_red.eval()
@@ -150,16 +151,6 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
         while not done:
             # Use torch.no_grad() for faster inference and to prevent gradient tracking
             with torch.no_grad():
-                # a_red = {
-                #     # k: torch.argmax(v).item()
-                #     k: torch.distributions.Categorical(logits=v).sample().item()
-                #     for k, v in policy_red.forward(torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)).items()
-                # }
-                # a_blue = {
-                #     # k: torch.argmax(v).item()
-                #     k: torch.distributions.Categorical(logits=v).sample().item()
-                #     for k, v in policy_blue.forward(torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)).items()
-                # }
                 a_red = policy_red.sample_action(obs["player_red"])
                 a_blue = policy_blue.sample_action(obs["player_blue"])
 
@@ -181,5 +172,5 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
 
 if __name__ == "__main__":
     train_league(
-        name='red_league_test2',
+        name='red_league_test3',
         num_episodes=100000, save_episodes=500, print_episodes=100)
