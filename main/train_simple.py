@@ -38,104 +38,104 @@ class FootballPolicy(nn.Module):
             for k, v in logits.items()
         }
 
-def train(name, num_episodes=2000, lr=1e-4, gamma=0.99):
-    env = FootballMultiAgentEnv()
+# def train(name, num_episodes=2000, lr=1e-4, gamma=0.99):
+#     env = FootballMultiAgentEnv()
 
-    policy_red = FootballPolicy()
-    policy_blue = FootballPolicy()
+#     policy_red = FootballPolicy()
+#     policy_blue = FootballPolicy()
 
-    opt_red = optim.Adam(policy_red.parameters(), lr=lr)
-    opt_blue = optim.Adam(policy_blue.parameters(), lr=lr)
+#     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
+#     opt_blue = optim.Adam(policy_blue.parameters(), lr=lr)
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(script_dir)
-    checkpoints_path = os.path.join(parent_dir, "checkpoints")
-    checkpoint_dir = os.path.join(checkpoints_path, name)
-    os.makedirs(checkpoint_dir, exist_ok=False)
+#     script_dir = os.path.dirname(os.path.abspath(__file__))
+#     parent_dir = os.path.dirname(script_dir)
+#     checkpoints_path = os.path.join(parent_dir, "checkpoints")
+#     checkpoint_dir = os.path.join(checkpoints_path, name)
+#     os.makedirs(checkpoint_dir, exist_ok=False)
 
-    for episode in range(num_episodes):
-        obs, _ = env.reset()
+#     for episode in range(num_episodes):
+#         obs, _ = env.reset()
 
-        # Trajectory buffers
-        logps_red, rewards_red = [], []
-        logps_blue, rewards_blue = [], []
+#         # Trajectory buffers
+#         logps_red, rewards_red = [], []
+#         logps_blue, rewards_blue = [], []
 
-        done = False
+#         done = False
 
-        while not done:
-            a_red  = policy_red.sample_action(obs["player_red"])
-            a_blue = policy_blue.sample_action(obs["player_blue"])
+#         while not done:
+#             a_red  = policy_red.sample_action(obs["player_red"])
+#             a_blue = policy_blue.sample_action(obs["player_blue"])
 
-            next_obs, rewards, terminated, truncated, _ = env.step(
-                {"player_red": a_red, "player_blue": a_blue}
-            )
-            done = terminated["__all__"] or truncated["__all__"]
+#             next_obs, rewards, terminated, truncated, _ = env.step(
+#                 {"player_red": a_red, "player_blue": a_blue}
+#             )
+#             done = terminated["__all__"] or truncated["__all__"]
 
-            # --- RED ---
-            obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
-            logits_red = policy_red.forward(obs_tensor_red)
-            logp_r = 0
-            for key in ["left", "right", "jump"]:
-                dist = torch.distributions.Categorical(logits=logits_red[key])
-                logp_r += dist.log_prob(torch.tensor(a_red[key]))
-            logps_red.append(logp_r)
-            rewards_red.append(rewards["player_red"])
+#             # --- RED ---
+#             obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
+#             logits_red = policy_red.forward(obs_tensor_red)
+#             logp_r = 0
+#             for key in ["left", "right", "jump"]:
+#                 dist = torch.distributions.Categorical(logits=logits_red[key])
+#                 logp_r += dist.log_prob(torch.tensor(a_red[key]))
+#             logps_red.append(logp_r)
+#             rewards_red.append(rewards["player_red"])
 
-            # --- BLUE ---
-            obs_tensor_blue = torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)
-            logits_blue = policy_blue.forward(obs_tensor_blue)
-            logp_b = 0
-            for key in ["left", "right", "jump"]:
-                dist = torch.distributions.Categorical(logits=logits_blue[key])
-                logp_b += dist.log_prob(torch.tensor(a_blue[key]))
-            logps_blue.append(logp_b)
-            rewards_blue.append(rewards["player_blue"])
+#             # --- BLUE ---
+#             obs_tensor_blue = torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)
+#             logits_blue = policy_blue.forward(obs_tensor_blue)
+#             logp_b = 0
+#             for key in ["left", "right", "jump"]:
+#                 dist = torch.distributions.Categorical(logits=logits_blue[key])
+#                 logp_b += dist.log_prob(torch.tensor(a_blue[key]))
+#             logps_blue.append(logp_b)
+#             rewards_blue.append(rewards["player_blue"])
 
-            obs = next_obs
+#             obs = next_obs
 
-        # ---- Update policies using REINFORCE ----
+#         # ---- Update policies using REINFORCE ----
 
-        def compute_returns(rewards_list):
-            G = np.zeros(1)
-            returns = []
-            for r in reversed(rewards_list):
-                G = np.array(r)[[0]] + gamma * G
-                returns.append(G)
-            returns.reverse()
-            returns = np.stack(returns)
-            return torch.tensor(returns, dtype=torch.float32)
+#         def compute_returns(rewards_list):
+#             G = np.zeros(1)
+#             returns = []
+#             for r in reversed(rewards_list):
+#                 G = np.array(r)[[0]] + gamma * G
+#                 returns.append(G)
+#             returns.reverse()
+#             returns = np.stack(returns)
+#             return torch.tensor(returns, dtype=torch.float32)
 
-        # RED
-        returns_red = compute_returns(rewards_red)
-        loss_red = -(torch.stack(logps_red) * returns_red).mean()
-        opt_red.zero_grad()
-        loss_red.backward()
-        opt_red.step()
+#         # RED
+#         returns_red = compute_returns(rewards_red)
+#         loss_red = -(torch.stack(logps_red) * returns_red).mean()
+#         opt_red.zero_grad()
+#         loss_red.backward()
+#         opt_red.step()
 
-        # BLUE
-        returns_blue = compute_returns(rewards_blue)
-        loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
-        opt_blue.zero_grad()
-        loss_blue.backward()
-        opt_blue.step()
+#         # BLUE
+#         returns_blue = compute_returns(rewards_blue)
+#         loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
+#         opt_blue.zero_grad()
+#         loss_blue.backward()
+#         opt_blue.step()
 
-        rewards_red = np.array(rewards_red).T
-        rewards_blue = np.array(rewards_blue).T
-        # print(rewards_red.shape)
+#         rewards_red = np.array(rewards_red).T
+#         rewards_blue = np.array(rewards_blue).T
+#         # print(rewards_red.shape)
 
-        if episode % 5 == 0:
-            print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[0, :]):.1f}, blue {np.sum(rewards_blue[0, :]):.1f}, move red {np.sum(rewards_red[1, :]):.1f}, blue {np.sum(rewards_blue[1, :]):.1f}, kick red {np.sum(rewards_red[2, :]):.1f}, blue {np.sum(rewards_blue[2, :]):.1f}, jump red {np.sum(rewards_red[3, :]):.1f}, blue {np.sum(rewards_blue[3, :]):.1f}")
+#         if episode % 5 == 0:
+#             print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[0, :]):.1f}, blue {np.sum(rewards_blue[0, :]):.1f}, move red {np.sum(rewards_red[1, :]):.1f}, blue {np.sum(rewards_blue[1, :]):.1f}, kick red {np.sum(rewards_red[2, :]):.1f}, blue {np.sum(rewards_blue[2, :]):.1f}, jump red {np.sum(rewards_red[3, :]):.1f}, blue {np.sum(rewards_blue[3, :]):.1f}")
 
-        if (episode + 1) % 50 == 0:
-            checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
-            print(f"Saving checkpoint to {checkpoint_path}...")
-            torch.save({
-                'episode': episode,
-                'policy_red_state_dict': policy_red.state_dict(),
-                'policy_blue_state_dict': policy_blue.state_dict(),
-                'optimizer_red_state_dict': opt_red.state_dict(),
-                'optimizer_blue_state_dict': opt_blue.state_dict(),
-            }, checkpoint_path)
+#         if (episode + 1) % 50 == 0:
+#             checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
+#             print(f"Saving checkpoint to {checkpoint_path}...")
+#             torch.save({
+#                 'episode': episode,
+#                 'policy_red_state_dict': policy_red.state_dict(),
+#                 'policy_blue_state_dict': policy_blue.state_dict(),
+#                 'optimizer_red_state_dict': opt_red.state_dict(),
+#                 'optimizer_blue_state_dict': opt_blue.state_dict(),
+#             }, checkpoint_path)
 
 # def evaluate(policy_red, policy_blue, episodes=10, render=False):
 #     env = FootballMultiAgentEnv({"render_mode": "human" if render else None})
@@ -172,7 +172,106 @@ def train(name, num_episodes=2000, lr=1e-4, gamma=0.99):
 #     env.close()
 #     return scores
 
-def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=".."):
+# def train_opponent(name, opponent_path, num_episodes=2000, lr=1e-4, gamma=0.99):
+#     env = FootballMultiAgentEnv()
+
+#     script_dir = os.path.dirname(os.path.abspath(__file__))
+#     parent_dir = os.path.dirname(script_dir)
+#     checkpoints_path = os.path.join(parent_dir, "checkpoints")
+#     checkpoint_dir = os.path.join(checkpoints_path, name)
+#     os.makedirs(checkpoint_dir, exist_ok=False)
+
+#     policy_red = FootballPolicy()
+#     policy_blue = FootballPolicy()
+
+#     checkpoint = torch.load(opponent_path)
+#     policy_blue.load_state_dict(checkpoint['policy_state_dict'])
+
+#     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
+#     #opt_blue = optim.Adam(policy_blue.parameters(), lr=lr)
+
+#     for episode in range(num_episodes):
+#         obs, _ = env.reset()
+
+#         # Trajectory buffers
+#         logps_red, rewards_red = [], []
+#         logps_blue, rewards_blue = [], []
+
+#         done = False
+
+#         while not done:
+#             a_red  = policy_red.sample_action(obs["player_red"])
+#             a_blue = policy_blue.sample_action(obs["player_blue"])
+
+#             next_obs, rewards, terminated, truncated, _ = env.step(
+#                 {"player_red": a_red, "player_blue": a_blue}
+#             )
+#             done = terminated["__all__"] or truncated["__all__"]
+
+#             # --- RED ---
+#             obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
+#             logits_red = policy_red.forward(obs_tensor_red)
+#             logp_r = 0
+#             for key in ["left", "right", "jump"]:
+#                 dist = torch.distributions.Categorical(logits=logits_red[key])
+#                 logp_r += dist.log_prob(torch.tensor(a_red[key]))
+#             logps_red.append(logp_r)
+#             rewards_red.append(rewards["player_red"])
+
+#             # --- BLUE ---
+#             obs_tensor_blue = torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)
+#             logits_blue = policy_blue.forward(obs_tensor_blue)
+#             logp_b = 0
+#             for key in ["left", "right", "jump"]:
+#                 dist = torch.distributions.Categorical(logits=logits_blue[key])
+#                 logp_b += dist.log_prob(torch.tensor(a_blue[key]))
+#             logps_blue.append(logp_b)
+#             rewards_blue.append(rewards["player_blue"])
+
+#             obs = next_obs
+
+#         # ---- Update policies using REINFORCE ----
+
+#         def compute_returns(rewards_list):
+#             G = np.zeros(3)
+#             returns = []
+#             for r in reversed(rewards_list):
+#                 G = np.array(r)[[0, 1, 2]] + gamma * G
+#                 returns.append(G)
+#             returns.reverse()
+#             returns = np.stack(returns)
+#             return torch.tensor(returns, dtype=torch.float32)
+
+#         # RED
+#         returns_red = compute_returns(rewards_red)
+#         loss_red = -(torch.stack(logps_red) * returns_red).mean()
+#         opt_red.zero_grad()
+#         loss_red.backward()
+#         opt_red.step()
+
+#         # BLUE
+#         # returns_blue = compute_returns(rewards_blue)
+#         # loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
+#         # opt_blue.zero_grad()
+#         # loss_blue.backward()
+#         # opt_blue.step()
+
+#         rewards_red = np.array(rewards_red).T
+#         rewards_blue = np.array(rewards_blue).T
+
+#         if episode % 5 == 0:
+#             print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[0, :]):.1f}, blue {np.sum(rewards_blue[0, :]):.1f}, move red {np.sum(rewards_red[1, :]):.1f}, blue {np.sum(rewards_blue[1, :]):.1f}, kick red {np.sum(rewards_red[2, :]):.1f}, blue {np.sum(rewards_blue[2, :]):.1f}, jump red {np.sum(rewards_red[3, :]):.1f}, blue {np.sum(rewards_blue[3, :]):.1f}")
+
+#         if (episode + 1) % 300 == 0:
+#             checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
+#             print(f"Saving checkpoint to {checkpoint_path}...")
+#             torch.save({
+#                 'episode': episode,
+#                 'policy_state_dict': policy_red.state_dict(),
+#                 'optimizer_state_dict': opt_red.state_dict(),
+#             }, checkpoint_path)
+
+def train_opponent(name, opponent_path, num_episodes=2000, lr=1e-4, gamma=0.99):
     env = FootballMultiAgentEnv()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -184,8 +283,8 @@ def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=
     policy_red = FootballPolicy()
     policy_blue = FootballPolicy()
 
-    checkpoint = torch.load(checkpoint_path2)
-    policy_blue.load_state_dict(checkpoint['policy_blue_state_dict'])
+    checkpoint = torch.load(opponent_path)
+    policy_blue.load_state_dict(checkpoint['policy_state_dict'])
 
     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
     #opt_blue = optim.Adam(policy_blue.parameters(), lr=lr)
@@ -233,10 +332,10 @@ def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=
         # ---- Update policies using REINFORCE ----
 
         def compute_returns(rewards_list):
-            G = np.zeros(4)
+            G = np.zeros(3)
             returns = []
             for r in reversed(rewards_list):
-                G = np.array(r)[[0, 1, 2, 3]] + gamma * G
+                G = np.array(r)[[0, 1, 2]] + gamma * G
                 returns.append(G)
             returns.reverse()
             returns = np.stack(returns)
@@ -250,15 +349,14 @@ def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=
         opt_red.step()
 
         # BLUE
-        returns_blue = compute_returns(rewards_blue)
-        #loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
-        #opt_blue.zero_grad()
-        #loss_blue.backward()
-        #opt_blue.step()
+        # returns_blue = compute_returns(rewards_blue)
+        # loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
+        # opt_blue.zero_grad()
+        # loss_blue.backward()
+        # opt_blue.step()
 
         rewards_red = np.array(rewards_red).T
         rewards_blue = np.array(rewards_blue).T
-        # print(rewards_red.shape)
 
         if episode % 5 == 0:
             print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[0, :]):.1f}, blue {np.sum(rewards_blue[0, :]):.1f}, move red {np.sum(rewards_red[1, :]):.1f}, blue {np.sum(rewards_blue[1, :]):.1f}, kick red {np.sum(rewards_red[2, :]):.1f}, blue {np.sum(rewards_blue[2, :]):.1f}, jump red {np.sum(rewards_red[3, :]):.1f}, blue {np.sum(rewards_blue[3, :]):.1f}")
@@ -268,8 +366,8 @@ def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=
             print(f"Saving checkpoint to {checkpoint_path}...")
             torch.save({
                 'episode': episode,
-                'policy_red_state_dict': policy_red.state_dict(),
-                'optimizer_red_state_dict': opt_red.state_dict(),
+                'policy_state_dict': policy_red.state_dict(),
+                'optimizer_state_dict': opt_red.state_dict(),
             }, checkpoint_path)
 
 def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, render=False):
@@ -333,7 +431,8 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
     env.close()
     return scores
 
-# ---- Run training and evaluation ----
 if __name__ == "__main__":
-    train_league(name='red_league', num_episodes=100000, checkpoint_path2="../checkpoints/league/kick_football_episode_1800.pth")
-# evaluate(policy_red, policy_blue, episodes=5, render=True)
+    train_opponent(
+        name='red_league_new',
+        opponent_path="../checkpoints/league_new/kick_football_episode_1800_2.pth",
+        num_episodes=100000)

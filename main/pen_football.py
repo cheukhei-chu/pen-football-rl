@@ -97,7 +97,9 @@ class FootballGame:
             player['can_double_jump'] = False
             player['is_waiting_for_jump_key_release'] = False
 
-        return jump_failed
+        move_towards_ball = (not keys['left'] and keys['right'] and self.ball['x'] > player['x']) or (keys['left'] and not keys['right'] and self.ball['x'] < player['x'])
+
+        return jump_failed, move_towards_ball
 
     def _update_ball(self):
         red_kicked = False
@@ -128,19 +130,20 @@ class FootballGame:
         return red_kicked, blue_kicked
 
     def step(self, red_keys, blue_keys):
-        red_jump_failed = self._update_player(self.red, red_keys)
-        blue_jump_failed = self._update_player(self.blue, blue_keys)
-        red_kicked, blue_kicked = self._update_ball()
-        red_scored, blue_scored = False, False
+        red_state, blue_state = {}, {}
+        red_state['jump_failed'], red_state['move_towards_ball'] = self._update_player(self.red, red_keys)
+        blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
+        red_state['kicked'], blue_state['kicked'] = self._update_ball()
+        red_state['scored'], blue_state['scored'] = False, False
 
         if self.ball['y'] < -40:
             if self.ball['x'] > 210:
                 self.score_red += 1
-                red_scored = True
+                red_state['scored'] = True
                 self._reset_round()
             elif self.ball['x'] < -210:
                 self.score_blue += 1
-                blue_scored = True
+                blue_state['scored'] = True
                 self._reset_round()
 
         terminated = (self.score_red >= 10 or self.score_blue >= 10)
@@ -148,7 +151,7 @@ class FootballGame:
         self.time_steps += 1
         truncated = self.time_steps >= 1800
 
-        return self._get_internal_observation(), (red_kicked, blue_kicked, red_scored, blue_scored, red_jump_failed, blue_jump_failed), terminated, truncated, {}
+        return self._get_internal_observation(), (red_state, blue_state), terminated, truncated, {}
 
     def render(self):
         if self.render_mode != 'human':

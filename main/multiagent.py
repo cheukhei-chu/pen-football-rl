@@ -83,26 +83,26 @@ class FootballMultiAgentEnv(gym.Env):
             "jump": a_blue["jump"] == 1
         }
 
-        _, (red_kicked, blue_kicked, red_scored, blue_scored, red_jump_failed, blue_jump_failed), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
+        _, (red_state, blue_state), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
 
-        red_x, red_y = self.game.red['x'], self.game.red['y']
-        blue_x, blue_y = self.game.blue['x'], self.game.blue['y']
-        ball_x, ball_y = self.game.ball['x'], self.game.ball['y']
+        # red_x, red_y = self.game.red['x'], self.game.red['y']
+        # blue_x, blue_y = self.game.blue['x'], self.game.blue['y']
+        # ball_x, ball_y = self.game.ball['x'], self.game.ball['y']
 
         #reward_red = 0
         #reward_blue = 0
 
-        score_red = (red_scored - blue_scored) * 100
-        score_blue = (blue_scored - red_scored) * 100
+        score_red = (red_state['scored'] - blue_state['scored']) * 100
+        score_blue = (blue_state['scored'] - red_state['scored']) * 100
 
-        move_red = 0
-        move_blue = 0
+        move_red = (red_state['move_towards_ball']) * 0.1
+        move_blue = (blue_state['move_towards_ball']) * 0.1
 
-        kick_red = 0
-        kick_blue = 0
+        kick_red = red_state['kicked'] * 10
+        kick_blue = blue_state['kicked'] * 10
 
-        jump_red = red_jump_failed * (-1)
-        jump_blue = blue_jump_failed * (-1)
+        jump_red = red_state['jump_failed'] * (-1)
+        jump_blue = blue_state['jump_failed'] * (-1)
 
         # # Scoring logic
         # if ball_y < -40:
@@ -117,26 +117,26 @@ class FootballMultiAgentEnv(gym.Env):
         #         #reward_blue += 100
         #         score_blue += 100
 
-        # Movement reward shaping
-        if a_red["right"] and ball_x > red_x:
-            #reward_red += 10
-            move_red += 0.1
-        if a_red["left"] and ball_x < red_x:
-            #reward_red += 10
-            move_red += 0.1
-        #reward_red -= abs(ball_y - red_y)
+        # # Movement reward shaping
+        # if a_red["right"] and ball_x > red_x:
+        #     #reward_red += 10
+        #     move_red += 0.1
+        # if a_red["left"] and ball_x < red_x:
+        #     #reward_red += 10
+        #     move_red += 0.1
+        # #reward_red -= abs(ball_y - red_y)
 
-        if a_blue["right"] and ball_x < blue_x:
-            #reward_blue += 10
-            move_blue += 0.1
-        if a_blue["left"] and ball_x > blue_x:
-            #reward_blue += 10
-            move_blue += 0.1
-        #reward_blue -= abs(ball_y - blue_y)
+        # if a_blue["right"] and ball_x < blue_x:
+        #     #reward_blue += 10
+        #     move_blue += 0.1
+        # if a_blue["left"] and ball_x > blue_x:
+        #     #reward_blue += 10
+        #     move_blue += 0.1
+        # #reward_blue -= abs(ball_y - blue_y)
 
         # Kicking bonuses
-        kick_red += red_kicked * 10
-        kick_blue += blue_kicked * 10
+        # kick_red += red_state['kicked'] * 10
+        # kick_blue += blue_state['kicked'] * 10
 
         # # Jump penalties
         # jump_red -= a_red["jump"]
@@ -150,7 +150,7 @@ class FootballMultiAgentEnv(gym.Env):
         }
 
         # terminateds = {"__all__": terminated}
-        terminateds = {"__all__": red_scored or blue_scored}
+        terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
         truncateds = {"__all__": truncated}
 
         return obs, rewards, terminateds, truncateds, {}
