@@ -85,12 +85,6 @@ class FootballMultiAgentEnv(gym.Env):
 
         _, (red_state, blue_state), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
 
-        # red_x, red_y = self.game.red['x'], self.game.red['y']
-        # blue_x, blue_y = self.game.blue['x'], self.game.blue['y']
-        # ball_x, ball_y = self.game.ball['x'], self.game.ball['y']
-
-        #reward_red = 0
-        #reward_blue = 0
 
         score_red = (red_state['scored'] - blue_state['scored']) * 100
         score_blue = (blue_state['scored'] - red_state['scored']) * 100

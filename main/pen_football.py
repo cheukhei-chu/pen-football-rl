@@ -236,11 +236,8 @@ if __name__ == "__main__":
         keys = pygame.key.get_pressed()
         red_keys = { 'jump': keys[pygame.K_w], 'left': keys[pygame.K_a], 'right': keys[pygame.K_d] }
         blue_keys = { 'jump': keys[pygame.K_UP], 'left': keys[pygame.K_LEFT], 'right': keys[pygame.K_RIGHT] }
-        game._update_player(game.red, red_keys); game._update_player(game.blue, blue_keys); game._update_ball()
-        if game.ball['y'] < -50:
-            if game.ball['x'] > 210: game.score_red += 1; game._reset_round()
-            elif game.ball['x'] < -210: game.score_blue += 1; game._reset_round()
-        if game.score_red >= 10 or game.score_blue >= 10:
+        _, _, terminated, _, _ = game.step(red_keys, blue_keys)
+        if terminated:
             print(f"Game Over! Final Score: Red {game.score_red} - Blue {game.score_blue}")
             game.reset()
         game.render()

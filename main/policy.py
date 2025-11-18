@@ -16,10 +16,10 @@ class FootballPolicy(nn.Module, ABC):
     def __init__(self):
         super().__init__()
 
-    @abstractmethod
-    def forward(self, obs):
-        """Given an observation (tensor), return the raw action logits/scores."""
-        pass
+    # @abstractmethod
+    # def forward(self, obs):
+    #     """Given an observation (tensor), return the raw action logits/scores."""
+    #     pass
 
     @abstractmethod
     def sample_action(self, obs):
@@ -56,7 +56,20 @@ class MLPPolicy(FootballPolicy):
             for k, v in logits.items()
         }
 
+class DummyPolicy(FootballPolicy):
+    def __init__(self):
+        super().__init__()
+
+    def sample_action(self, obs):
+        return {
+            "left":  0,
+            "right": 0,
+            "jump":  0,
+        }
+
 def make_policy(class_name, **kwargs):
     if class_name == "MLPPolicy":
         return MLPPolicy(**kwargs)
+    elif class_name == "DummyPolicy":
+        return DummyPolicy(**kwargs)
     raise ValueError("Unknown policy:", class_name)

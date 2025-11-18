@@ -10,7 +10,52 @@ import random
 from multiagent import FootballMultiAgentEnv
 from policy import *
 
-def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20):
+def compute_returns(rewards_list, gamma=0.99):
+    G = np.zeros(2)
+    returns = []
+    for r in reversed(rewards_list):
+        G = np.array(r)[[0, 1]] + gamma * G
+        returns.append(G)
+    returns.reverse()
+    returns = np.stack(returns)
+    return torch.tensor(returns, dtype=torch.float32)
+
+def sim_episode(env, policy_red, policy_blue, gamma=0.99):
+    obs, _ = env.reset()
+
+    logps_red, rewards_red = [], []
+    logps_blue, rewards_blue = [], []
+
+    done = False
+
+    while not done:
+        a_red  = policy_red.sample_action(obs["player_red"])
+        a_blue = policy_blue.sample_action(obs["player_blue"])
+
+        next_obs, rewards, terminated, truncated, _ = env.step(
+            {"player_red": a_red, "player_blue": a_blue}
+        )
+        done = terminated["__all__"] or truncated["__all__"]
+
+        obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
+        logits_red = policy_red.forward(obs_tensor_red)
+        logp_r = 0
+        for key in ["left", "right", "jump"]:
+            dist = torch.distributions.Categorical(logits=logits_red[key])
+            logp_r += dist.log_prob(torch.tensor(a_red[key]))
+        logps_red.append(logp_r)
+
+        rewards_red.append(rewards["player_red"])
+        rewards_blue.append(rewards["player_blue"])
+
+        obs = next_obs
+
+    returns_red = compute_returns(rewards_red, gamma=gamma)
+    loss_red = -(torch.stack(logps_red) * returns_red).mean()
+
+    return loss_red, np.array(rewards_red), np.array(rewards_blue)
+
+def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
     opponent_pool = []
 
     env = FootballMultiAgentEnv()
@@ -40,78 +85,16 @@ def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99,
     for episode in range(num_episodes):
         policy_blue = select_opponent()
 
-        obs, _ = env.reset()
+        loss_red, rewards_red, rewards_blue = sim_episode(env, policy_red, policy_blue, gamma=gamma)
 
-        # Trajectory buffers
-        logps_red, rewards_red = [], []
-        logps_blue, rewards_blue = [], []
-
-        done = False
-
-        while not done:
-            a_red  = policy_red.sample_action(obs["player_red"])
-            a_blue = policy_blue.sample_action(obs["player_blue"])
-
-            next_obs, rewards, terminated, truncated, _ = env.step(
-                {"player_red": a_red, "player_blue": a_blue}
-            )
-            done = terminated["__all__"] or truncated["__all__"]
-
-            # --- RED ---
-            obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
-            logits_red = policy_red.forward(obs_tensor_red)
-            logp_r = 0
-            for key in ["left", "right", "jump"]:
-                dist = torch.distributions.Categorical(logits=logits_red[key])
-                logp_r += dist.log_prob(torch.tensor(a_red[key]))
-            logps_red.append(logp_r)
-            rewards_red.append(rewards["player_red"])
-
-            # --- BLUE ---
-            obs_tensor_blue = torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)
-            logits_blue = policy_blue.forward(obs_tensor_blue)
-            logp_b = 0
-            for key in ["left", "right", "jump"]:
-                dist = torch.distributions.Categorical(logits=logits_blue[key])
-                logp_b += dist.log_prob(torch.tensor(a_blue[key]))
-            logps_blue.append(logp_b)
-            rewards_blue.append(rewards["player_blue"])
-
-            obs = next_obs
-
-        # ---- Update policies using REINFORCE ----
-
-        def compute_returns(rewards_list):
-            G = np.zeros(2)
-            returns = []
-            for r in reversed(rewards_list):
-                G = np.array(r)[[0, 1]] + gamma * G
-                returns.append(G)
-            returns.reverse()
-            returns = np.stack(returns)
-            return torch.tensor(returns, dtype=torch.float32)
-
-        # RED
-        returns_red = compute_returns(rewards_red)
-        loss_red = -(torch.stack(logps_red) * returns_red).mean()
         opt_red.zero_grad()
         loss_red.backward()
         opt_red.step()
 
-        # BLUE
-        # returns_blue = compute_returns(rewards_blue)
-        # loss_blue = -(torch.stack(logps_blue) * returns_blue).mean()
-        # opt_blue.zero_grad()
-        # loss_blue.backward()
-        # opt_blue.step()
+        if episode % print_episodes == 0:
+            print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[:, 0]):.1f}, blue {np.sum(rewards_blue[:, 0]):.1f}, move red {np.sum(rewards_red[:, 1]):.1f}, blue {np.sum(rewards_blue[:, 1]):.1f}, kick red {np.sum(rewards_red[:, 2]):.1f}, blue {np.sum(rewards_blue[:, 2]):.1f}, jump red {np.sum(rewards_red[:, 3]):.1f}, blue {np.sum(rewards_blue[:, 3]):.1f}")
 
-        rewards_red = np.array(rewards_red).T
-        rewards_blue = np.array(rewards_blue).T
-
-        if episode % 5 == 0:
-            print(f"Episode {episode}: rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(rewards_red[0, :]):.1f}, blue {np.sum(rewards_blue[0, :]):.1f}, move red {np.sum(rewards_red[1, :]):.1f}, blue {np.sum(rewards_blue[1, :]):.1f}, kick red {np.sum(rewards_red[2, :]):.1f}, blue {np.sum(rewards_blue[2, :]):.1f}, jump red {np.sum(rewards_red[3, :]):.1f}, blue {np.sum(rewards_blue[3, :]):.1f}")
-
-        if (episode + 1) % 50 == 0:
+        if (episode + 1) % save_episodes == 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
             print(f"Saving checkpoint to {checkpoint_path}...")
             torch.save({
@@ -187,5 +170,5 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
 
 if __name__ == "__main__":
     train_league(
-        name='red_league_test',
+        name='red_league_test2',
         num_episodes=100000)
