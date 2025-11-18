@@ -1,0 +1,3 @@
+PPO does not work, REINFORCE does- likely because of the many useless states and lack of use of most immediate movements
+
+Training in 

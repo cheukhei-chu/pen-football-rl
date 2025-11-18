@@ -66,6 +66,22 @@ class DummyPolicy(FootballPolicy):
             "right": 0,
             "jump":  0,
         }
+'''
+Format of observation (the variable obs) is as follows:
+
+indices 0 through 3 contain x_pos, y_pos, x_vel, y_vel for red
+indices 4 through 7 contain this for blue
+indices 8 through 11 contain this for ball
+'''
+
+class atulPolicy(FootballPolicy):
+    def __init__(self):
+        super().__init__()
+
+    def sample_action(self, obs):
+        if abs(obs[11])<0.2 and obs[8] > obs[0]:
+            return {"left":0, "right":1, "jump":0}
+        return {"left":0,"right":0,"jump":0}
 
 def make_policy(class_name, **kwargs):
     if class_name == "MLPPolicy":
@@ -73,3 +89,5 @@ def make_policy(class_name, **kwargs):
     elif class_name == "DummyPolicy":
         return DummyPolicy(**kwargs)
     raise ValueError("Unknown policy:", class_name)
+
+

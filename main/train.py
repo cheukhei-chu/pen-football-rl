@@ -72,15 +72,16 @@ def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99,
     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
 
     def select_opponent():
-        if random.random() < 1/(len(opponent_pool)+1):
-            return policy_red
-        else:
-            opponent_path = random.choice(opponent_pool)
-            checkpoint = torch.load(opponent_path)
-            policy = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
-            if checkpoint['policy_state_dict']:
-                policy.load_state_dict(checkpoint['policy_state_dict'])
-            return policy
+        # if random.random() < 1/(len(opponent_pool)+1):
+        #     return policy_red
+        # else:
+        #     opponent_path = random.choice(opponent_pool)
+        #     checkpoint = torch.load(opponent_path)
+        #     policy = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
+        #     if checkpoint['policy_state_dict']:
+        #         policy.load_state_dict(checkpoint['policy_state_dict'])
+        #     return policy
+        return atulPolicy()
 
     for episode in range(num_episodes):
         policy_blue = select_opponent()
@@ -112,19 +113,27 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
     Loads policies from a checkpoint file and evaluates them.
     """
     assert os.path.exists(checkpoint_path1), f"Error: Checkpoint file not found at {checkpoint_path1}"
-    assert os.path.exists(checkpoint_path2), f"Error: Checkpoint file not found at {checkpoint_path2}"
+    
 
     # Step 1: Instantiate new policy models
     policy_red = MLPPolicy()
     policy_blue = MLPPolicy()
 
+    if not isinstance(checkpoint_path2, FootballPolicy):
+        assert os.path.exists(checkpoint_path2), f"Error: Checkpoint file not found at {checkpoint_path2}"
+        checkpoint2 = torch.load(checkpoint_path2)
+        policy_blue.load_state_dict(checkpoint2['policy_state_dict'])
+    else:
+        policy_blue = checkpoint_path2
+
     # Step 2: Load the checkpoint dictionary
     print(f"Loading checkpoint from {checkpoint_path1} and {checkpoint_path2}...")
     checkpoint = torch.load(checkpoint_path1)
-    checkpoint2 = torch.load(checkpoint_path2)
+    
     # Step 3: Load the saved weights into the models
     policy_red.load_state_dict(checkpoint['policy_state_dict'])
-    policy_blue.load_state_dict(checkpoint2['policy_state_dict'])
+
+    
 
     # Step 4: Set the models to evaluation mode
     policy_red.eval()
@@ -141,16 +150,18 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
         while not done:
             # Use torch.no_grad() for faster inference and to prevent gradient tracking
             with torch.no_grad():
-                a_red = {
-                    # k: torch.argmax(v).item()
-                    k: torch.distributions.Categorical(logits=v).sample().item()
-                    for k, v in policy_red.forward(torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)).items()
-                }
-                a_blue = {
-                    # k: torch.argmax(v).item()
-                    k: torch.distributions.Categorical(logits=v).sample().item()
-                    for k, v in policy_blue.forward(torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)).items()
-                }
+                # a_red = {
+                #     # k: torch.argmax(v).item()
+                #     k: torch.distributions.Categorical(logits=v).sample().item()
+                #     for k, v in policy_red.forward(torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)).items()
+                # }
+                # a_blue = {
+                #     # k: torch.argmax(v).item()
+                #     k: torch.distributions.Categorical(logits=v).sample().item()
+                #     for k, v in policy_blue.forward(torch.tensor(obs["player_blue"], dtype=torch.float32).unsqueeze(0)).items()
+                # }
+                a_red = policy_red.sample_action(obs["player_red"])
+                a_blue = policy_blue.sample_action(obs["player_blue"])
 
             obs, rewards, terminated, truncated, _ = env.step(
                 {"player_red": a_red, "player_blue": a_blue}
@@ -171,4 +182,4 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
 if __name__ == "__main__":
     train_league(
         name='red_league_test2',
-        num_episodes=100000)
+        num_episodes=100000, save_episodes=500, print_episodes=100)
