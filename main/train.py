@@ -149,7 +149,6 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
         total_reward = np.zeros(4)
 
         while not done:
-            # Use torch.no_grad() for faster inference and to prevent gradient tracking
             with torch.no_grad():
                 a_red = policy_red.sample_action(obs["player_red"])
                 a_blue = policy_blue.sample_action(obs["player_blue"])
@@ -173,4 +172,5 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
 if __name__ == "__main__":
     train_league(
         name='red_league_test3',
-        num_episodes=100000, save_episodes=500, print_episodes=100)
+        num_episodes=100000, save_episodes=500, print_episodes=100
+        )
