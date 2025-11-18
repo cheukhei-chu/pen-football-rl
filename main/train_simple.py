@@ -95,10 +95,10 @@ def train(name, num_episodes=2000, lr=1e-4, gamma=0.99):
         # ---- Update policies using REINFORCE ----
 
         def compute_returns(rewards_list):
-            G = np.zeros(4)
+            G = np.zeros(1)
             returns = []
             for r in reversed(rewards_list):
-                G = np.array(r)[[0, 1, 2, 3]] + gamma * G
+                G = np.array(r)[[0]] + gamma * G
                 returns.append(G)
             returns.reverse()
             returns = np.stack(returns)
@@ -235,5 +235,5 @@ def evaluate_from_checkpoint(checkpoint_path, episodes=10, render=False):
 
 # ---- Run training and evaluation ----
 if __name__ == "__main__":
-    train(name=None, num_episodes=10000)
+    train(name='checkpoints (score)', num_episodes=10000)
 # evaluate(policy_red, policy_blue, episodes=5, render=True)

@@ -149,7 +149,8 @@ class FootballMultiAgentEnv(gym.Env):
             "player_blue": [float(score_blue),float(move_blue),float(kick_blue),float(jump_blue)]
         }
 
-        terminateds = {"__all__": terminated}
+        # terminateds = {"__all__": terminated}
+        terminateds = {"__all__": red_scored or blue_scored}
         truncateds = {"__all__": truncated}
 
         return obs, rewards, terminateds, truncateds, {}

@@ -1,3 +1,3 @@
 from train_simple import evaluate_from_checkpoint
 
-evaluate_from_checkpoint('./checkpoints (buggy score and no move and jump)/football_episode_1800.pth', episodes=1, render=True)
+evaluate_from_checkpoint('../checkpoints/checkpoints (score, move, kick, jump)/football_episode_9900.pth', episodes=5, render=True)
