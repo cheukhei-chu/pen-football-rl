@@ -272,25 +272,24 @@ def train_league(name, num_episodes=2000, lr=1e-4, gamma=0.99, checkpoint_path2=
                 'optimizer_red_state_dict': opt_red.state_dict(),
             }, checkpoint_path)
 
-def evaluate_from_checkpoint(checkpoint_path, episodes=10, render=False,checkpoint_path2 = "../checkpoints/league/kick_football_episode_1800.pth"):
+def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, render=False):
     """
     Loads policies from a checkpoint file and evaluates them.
     """
-    if not os.path.exists(checkpoint_path):
-        print(f"Error: Checkpoint file not found at {checkpoint_path}")
-        return None
+    assert os.path.exists(checkpoint_path1), f"Error: Checkpoint file not found at {checkpoint_path1}"
+    assert os.path.exists(checkpoint_path2), f"Error: Checkpoint file not found at {checkpoint_path2}"
 
     # Step 1: Instantiate new policy models
     policy_red = FootballPolicy()
     policy_blue = FootballPolicy()
 
     # Step 2: Load the checkpoint dictionary
-    print(f"Loading checkpoint from {checkpoint_path}...")
-    checkpoint = torch.load(checkpoint_path)
+    print(f"Loading checkpoint from {checkpoint_path1} and {checkpoint_path2}...")
+    checkpoint = torch.load(checkpoint_path1)
     checkpoint2 = torch.load(checkpoint_path2)
     # Step 3: Load the saved weights into the models
-    policy_red.load_state_dict(checkpoint['policy_red_state_dict'])
-    policy_blue.load_state_dict(checkpoint2['policy_blue_state_dict'])
+    policy_red.load_state_dict(checkpoint['policy_state_dict'])
+    policy_blue.load_state_dict(checkpoint2['policy_state_dict'])
 
     # Step 4: Set the models to evaluation mode
     policy_red.eval()
