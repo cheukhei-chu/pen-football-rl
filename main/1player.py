@@ -11,11 +11,7 @@ def play_one_player(policy: FootballPolicy | str):
     """
 
     if not isinstance(policy, FootballPolicy):
-        assert os.path.exists(policy), f"Error: Checkpoint file not found at {policy}"
-        checkpoint = torch.load(policy)
-        policy_blue = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
-        if checkpoint['policy_state_dict']:
-            policy_blue.load_state_dict(checkpoint['policy_state_dict'])
+        policy_blue, _ = policy_from_checkpoint_path(policy)
     else:
         policy_blue = policy
 
@@ -80,4 +76,4 @@ def play_one_player(policy: FootballPolicy | str):
 
 
 if __name__ == "__main__":
-    play_one_player("../checkpoints/red_league_test2/football_episode_38000.pth")
+    play_one_player("../checkpoints/red_league_test3/football_episode_500.pth")

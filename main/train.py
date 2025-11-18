@@ -58,7 +58,7 @@ def sim_episode(env, policy_red, policy_blue, gamma=0.99):
 
     return loss_red, (np.array(rewards_red), np.array(rewards_blue)), (np.array(reports_red), np.array(reports_blue))
 
-def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
+def train_league(name, policy: tuple[str, dict] | str, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
     opponent_pool = []
 
     env = FootballMultiAgentEnv()
@@ -69,7 +69,12 @@ def train_league(name, policy_kwargs={}, num_episodes=2000, lr=1e-4, gamma=0.99,
     checkpoint_dir = os.path.join(checkpoints_path, name)
     os.makedirs(checkpoint_dir, exist_ok=False)
 
-    policy_red = MLPPolicy(**policy_kwargs)
+    if isinstance(policy, tuple):
+        policy_name, policy_kwargs = policy
+        policy_red = make_policy(policy_name, **policy_kwargs)
+    else:
+        policy_red, checkpoint = policy_from_checkpoint_path(policy)
+        policy_kwargs = checkpoint["policy_kwargs"]
     policy_blue = None
 
     opt_red = optim.Adam(policy_red.parameters(), lr=lr)
@@ -171,6 +176,7 @@ def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, re
 
 if __name__ == "__main__":
     train_league(
-        name='red_league_test3',
+        name="red_league_test3",
+        policy="../checkpoints/red_league_test2/football_episode_38000.pth",
         num_episodes=100000, save_episodes=500, print_episodes=100
         )

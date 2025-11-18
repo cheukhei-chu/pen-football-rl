@@ -86,6 +86,8 @@ class atulPolicy(FootballPolicy):
 class CurriculumMLPPolicy(FootballPolicy):
     def __init__(self, embed_dim=3):
         super().__init__()
+        self.embed_dim = embed_dim
+
         self.plan_net = nn.Sequential(
             nn.Linear(12, 128),
             nn.ReLU(),
@@ -141,3 +143,13 @@ def make_policy(class_name, **kwargs):
     if class_name in name_to_class:
         return name_to_class[class_name](**kwargs)
     raise ValueError("Unknown policy:", class_name)
+
+
+
+def policy_from_checkpoint_path(checkpoint_path):
+    assert os.path.exists(checkpoint_path), f"Error: Checkpoint file not found at {checkpoint_path}"
+    checkpoint = torch.load(checkpoint_path)
+    policy = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
+    if checkpoint['policy_state_dict']:
+        policy.load_state_dict(checkpoint['policy_state_dict'])
+    return policy, checkpoint
