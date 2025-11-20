@@ -114,6 +114,8 @@ class FootballGame:
     def _update_ball(self):
         red_kicked = False
         blue_kicked = False
+        ball_hit_ground = False
+        ball_hit_ceiling = False
 
         def process_collision(player):
             dx = self.ball['x'] - player['x']
@@ -134,19 +136,23 @@ class FootballGame:
         self.ball['x'] += self.ball['vx']; self.ball['y'] += self.ball['vy']
 
         if abs(self.ball['x']) > WALL_X: self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
-        if self.ball['y'] < GROUND_Y: self.ball['y'], self.ball['vy'] = GROUND_Y, self.ball['vy'] * -0.7
-        if self.ball['y'] > CEILING_Y: self.ball['y'], self.ball['vy'] = CEILING_Y, self.ball['vy'] * -0.7
+        if self.ball['y'] < GROUND_Y:
+            ball_hit_ground = True
+            self.ball['y'], self.ball['vy'] = GROUND_Y, self.ball['vy'] * -0.7
+        if self.ball['y'] > CEILING_Y:
+            ball_hit_ceiling = True
+            self.ball['y'], self.ball['vy'] = CEILING_Y, self.ball['vy'] * -0.7
 
         if abs(self.ball['x']) > 205 and self.ball['y'] > -40 and self.ball['y'] + self.ball['vy'] <= -40:
             self.ball['y'], self.ball['vy'] = -40, 5; self.ball['vx'] = -5 * np.sign(self.ball['x'])
 
-        return (red_ball_dist, red_kicked), (blue_ball_dist, blue_kicked)
+        return (red_ball_dist, red_kicked), (blue_ball_dist, blue_kicked), (ball_hit_ground, ball_hit_ceiling)
 
     def step(self, red_keys, blue_keys):
         red_state, blue_state, game_state = {}, {}, {}
         red_state['jump_failed'], red_state['move_towards_ball'] = self._update_player(self.red, red_keys)
         blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
-        (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']) = self._update_ball()
+        (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']), (ball_hit_ground, ball_hit_ceiling) = self._update_ball()
         red_state['scored'], blue_state['scored'] = False, False
 
         if self.ball['y'] < -40:
@@ -164,6 +170,8 @@ class FootballGame:
         self.time_steps += 1
         truncated = self.time_steps >= 1800
         game_state['time_steps'] = self.time_steps
+        game_state['ball_hit_ground'] = ball_hit_ground
+        game_state['ball_hit_ceiling'] = ball_hit_ceiling
 
         return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {"vx": self.ball["vx"], "vy": self.ball["vy"]}
 
