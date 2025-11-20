@@ -9,6 +9,7 @@ import random
 
 from multiagent import FootballMultiAgentEnv
 from policy import *
+from pen_football import *
 
 def visualize_drill(policy: str, select_drill, episodes=10, render=False):
     """
@@ -54,6 +55,9 @@ def visualize_drill(policy: str, select_drill, episodes=10, render=False):
     return scores
 
 if __name__ == "__main__":
+    pygame.init()
+    screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
+    pygame.display.set_caption("Pen Football - One Player")
     visualize_drill(
         policy="../checkpoints/block_drill/football_episode_100000.pth",
         select_drill=lambda: {"drill": "block"},
