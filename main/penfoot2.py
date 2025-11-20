@@ -234,21 +234,23 @@ def sample():
         game = FootballGame()
         pos_x = (random.random()-0.5)*2/230
         pos_y = min((random.random()-0.5)*2*151,150)/150
-        vel_x = (random.random()-1)*30
-        vel_y = (random.random()-0.5)*2*20
+        vel_x = (random.random()-1)*30/20
+        vel_y = (random.random()-0.5)*2*20/20
         game.preset([0,0,0,0,0,0,0,0,pos_x,pos_y,vel_x,vel_y])
         for _ in range(90):
             _, (red_state, blue_state), _, _, _ = game.step(empty,empty)
-        
+            
             if blue_state['scored']:
                 #print("YAY")
                 return [pos_x,pos_y,vel_x,vel_y]
+            if game.ball['y']==GROUND_Y:
+                
         #print("HM")
         
 
 
 
-def generate_samples(n, filename="samples.npy"):
+def generate_samples(n, filename="samples_nobounce.npy"):
     # allocate array: each sample is [pos_x, pos_y, vel_x, vel_y]
     data = np.zeros((n, 4), dtype=float)
 

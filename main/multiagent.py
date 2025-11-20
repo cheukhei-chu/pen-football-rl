@@ -79,6 +79,15 @@ class FootballMultiAgentEnv(gym.Env):
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
             self.game.preset(obs)
+        elif self.setting["drill"] == "block_nobounce":
+            data = np.load("../samples/block_nobounce.npy")
+            ind = random.randint(0, 999)
+            ball_obs = data[ind, :]
+            red_obs = np.array([random.uniform(-1, random.uniform(-1, ball_obs[0])), random.uniform(-1, random.uniform(-1, ball_obs[1])), random.gauss(0, 3/20), random.gauss(0, 3/20)])
+            # red_obs = np.array([-200/230, -130/150, 0, 0])
+            blue_obs = np.array([1, -1, 0, 0])
+            obs = np.concatenate([red_obs, blue_obs, ball_obs])
+            self.game.preset(obs)
         elif self.setting["drill"] == "shot":
             raise NotImplementedError("Sample from some pre-computed file.")
         return self._get_obs(), {}
@@ -168,6 +177,14 @@ class FootballMultiAgentEnv(gym.Env):
                 "player_red": score_red,
                 "player_blue": score_blue
             }
+        elif self.setting["drill"] == "block_nobounce":
+            score_red = blue_state["scored"] * (-10) + (game_state["time_steps"] == 90) * 10
+            score_blue = 0
+
+            rewards = {
+                "player_red": score_red,
+                "player_blue": score_blue
+            }
         return rewards
 
     def comp_terminateds(self, red_state: dict, blue_state: dict):
@@ -175,11 +192,15 @@ class FootballMultiAgentEnv(gym.Env):
             terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
         elif self.setting["drill"] == "block":
             terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
+        elif self.setting["drill"] == "block_nobounce":
+            terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
         return terminateds
 
     def comp_truncateds(self, game_state: dict):
         if self.setting is None:
             truncateds = {"__all__": game_state['time_steps'] > 1800}
         elif self.setting["drill"] == "block":
+            truncateds = {"__all__": game_state['time_steps'] > 90}
+        elif self.setting["drill"] == "block_nobounce":
             truncateds = {"__all__": game_state['time_steps'] > 90}
         return truncateds
