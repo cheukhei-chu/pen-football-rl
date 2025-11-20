@@ -55,7 +55,7 @@ def visualize_drill(policy: str, select_drill, episodes=10, render=False):
 
 if __name__ == "__main__":
     visualize_drill(
-        policy="../checkpoints/block_drill/football_episode_56000.pth",
+        policy="../checkpoints/block_drill/football_episode_100000.pth",
         select_drill=lambda: {"drill": "block"},
         episodes=20, render=True
         )
