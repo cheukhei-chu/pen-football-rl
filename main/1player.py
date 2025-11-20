@@ -76,4 +76,4 @@ def play_one_player(policy: FootballPolicy | str):
 
 
 if __name__ == "__main__":
-    play_one_player("../checkpoints/red_league_test3/football_episode_500.pth")
+    play_one_player("../checkpoints/red_league_test/football_episode_1400.pth")

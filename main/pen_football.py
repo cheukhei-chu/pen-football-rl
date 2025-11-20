@@ -63,6 +63,16 @@ class FootballGame:
         self.time_steps = 0
         return self._get_internal_observation()
 
+    def preset(self, obs):
+        """Resets the entire game to the give state for a new episode."""
+        self.ball = {'x': obs[0]*WALL_X, 'y': obs[1]*CEILING_Y, 'vx': obs[2]*20, 'vy': obs[3]*20}
+        self.red = {'x': obs[4]*WALL_X, 'y': obs[5]*CEILING_Y, 'vx': obs[6]*20, 'vy': obs[7]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.blue = {'x': obs[8]*WALL_X, 'y': obs[9]*CEILING_Y, 'vx': obs[10]*20, 'vy': obs[11]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.score_red = 0
+        self.score_blue = 0
+        self.time_steps = 0
+        return self._get_internal_observation()
+
     def _update_player(self, player, keys):
         jump_failed = False
         is_on_ground = player['y'] <= GROUND_Y
