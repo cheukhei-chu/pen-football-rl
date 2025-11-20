@@ -44,9 +44,9 @@ class FootballGame:
 
     def _reset_round(self):
         """Resets positions and velocities for a new round (e.g., after a goal)."""
-        self.ball = {'x': 0, 'y': 0, 'vx': 0, 'vy': 0}
         self.red = {'x': -200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
         self.blue = {'x': 200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.ball = {'x': 0, 'y': 0, 'vx': 0, 'vy': 0}
 
     def _get_internal_observation(self):
         return np.array([
@@ -65,9 +65,9 @@ class FootballGame:
 
     def preset(self, obs):
         """Resets the entire game to the give state for a new episode."""
-        self.ball = {'x': obs[0]*WALL_X, 'y': obs[1]*CEILING_Y, 'vx': obs[2]*20, 'vy': obs[3]*20}
-        self.red = {'x': obs[4]*WALL_X, 'y': obs[5]*CEILING_Y, 'vx': obs[6]*20, 'vy': obs[7]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
-        self.blue = {'x': obs[8]*WALL_X, 'y': obs[9]*CEILING_Y, 'vx': obs[10]*20, 'vy': obs[11]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.red = {'x': obs[0]*WALL_X, 'y': obs[1]*CEILING_Y, 'vx': obs[2]*20, 'vy': obs[3]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.blue = {'x': obs[4]*WALL_X, 'y': obs[5]*CEILING_Y, 'vx': obs[6]*20, 'vy': obs[7]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
+        self.ball = {'x': obs[8]*WALL_X, 'y': obs[9]*CEILING_Y, 'vx': obs[10]*20, 'vy': obs[11]*20}
         self.score_red = 0
         self.score_blue = 0
         self.time_steps = 0
@@ -120,10 +120,13 @@ class FootballGame:
             self.ball['vx'] = (player['vx'] * abs(dx)) / 5 + dx / 5
             self.ball['vy'] = player['vy'] + 10
 
-        if np.hypot(self.ball['x'] - self.red['x'], self.ball['y'] - self.red['y']) < 20:
+        red_ball_dist = np.hypot(self.ball['x'] - self.red['x'], self.ball['y'] - self.red['y'])
+        blue_ball_dist = np.hypot(self.ball['x'] - self.blue['x'], self.ball['y'] - self.blue['y'])
+
+        if red_ball_dist < 20:
             process_collision(self.red)
             red_kicked = True
-        if np.hypot(self.ball['x'] - self.blue['x'], self.ball['y'] - self.blue['y']) < 20:
+        if blue_ball_dist < 20:
             process_collision(self.blue)
             blue_kicked = True
 
@@ -137,13 +140,13 @@ class FootballGame:
         if abs(self.ball['x']) > 205 and self.ball['y'] > -40 and self.ball['y'] + self.ball['vy'] <= -40:
             self.ball['y'], self.ball['vy'] = -40, 5; self.ball['vx'] = -5 * np.sign(self.ball['x'])
 
-        return red_kicked, blue_kicked
+        return (red_ball_dist, red_kicked), (blue_ball_dist, blue_kicked)
 
     def step(self, red_keys, blue_keys):
-        red_state, blue_state = {}, {}
+        red_state, blue_state, game_state = {}, {}, {}
         red_state['jump_failed'], red_state['move_towards_ball'] = self._update_player(self.red, red_keys)
         blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
-        red_state['kicked'], blue_state['kicked'] = self._update_ball()
+        (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']) = self._update_ball()
         red_state['scored'], blue_state['scored'] = False, False
 
         if self.ball['y'] < -40:
@@ -160,8 +163,9 @@ class FootballGame:
 
         self.time_steps += 1
         truncated = self.time_steps >= 1800
+        game_state['time_steps'] = self.time_steps
 
-        return self._get_internal_observation(), (red_state, blue_state), terminated, truncated, {}
+        return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {"vx": self.ball["vx"], "vy": self.ball["vy"]}
 
     def render(self):
         if self.render_mode != 'human':

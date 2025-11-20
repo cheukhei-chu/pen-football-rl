@@ -1,5 +1,7 @@
 import pygame
 import numpy as np
+import random
+import time
 import gymnasium as gym
 from gymnasium import spaces
 
@@ -35,6 +37,11 @@ class FootballMultiAgentEnv(gym.Env):
             agent: spaces.Box(low=low, high=high, shape=(12,), dtype=np.float32)
             for agent in self.possible_agents
         })
+        self.setting = None
+
+    def set_setting(self, drill):
+        """Sets setting"""
+        self.setting = drill
 
     # -----------------------------------------------------
 
@@ -61,7 +68,19 @@ class FootballMultiAgentEnv(gym.Env):
     # -----------------------------------------------------
 
     def reset(self, *, seed=None, options=None):
-        self.game.reset()
+        if self.setting is None:
+            self.game.reset()
+        elif self.setting["drill"] == "block":
+            data = np.load("../samples/block.npy")
+            ind = random.randint(0, 999)
+            ball_obs = data[ind, :]
+            # red_obs = np.array([random.uniform(-1, ball_obs[0]), random.uniform(-1, ball_obs[1]), random.gauss(0, 3/20), random.gauss(0, 3/20)])
+            red_obs = np.array([-200/230, -130/150, 0, 0])
+            blue_obs = np.array([1, -1, 0, 0])
+            obs = np.concatenate([red_obs, blue_obs, ball_obs])
+            self.game.preset(obs)
+        elif self.setting["drill"] == "shot":
+            raise NotImplementedError("Sample from some pre-computed file.")
         return self._get_obs(), {}
 
     # -----------------------------------------------------
@@ -81,15 +100,15 @@ class FootballMultiAgentEnv(gym.Env):
             "jump": a_blue["jump"] == 1
         }
 
-        _, (red_state, blue_state), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
+        _, (red_state, blue_state, game_state), terminated, truncated, _ = self.game.step(red_keys, blue_keys)
 
         obs = self._get_obs()
 
         reports = self.comp_reports(red_state, blue_state)
-        rewards = self.comp_rewards(red_state, blue_state)
+        rewards = self.comp_rewards(red_state, blue_state, game_state)
 
-        terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
-        truncateds = {"__all__": truncated}
+        terminateds = self.comp_terminateds(red_state, blue_state)
+        truncateds = self.comp_truncateds(game_state)
 
         return obs, rewards, terminateds, truncateds, {"reports": reports}
 
@@ -114,27 +133,53 @@ class FootballMultiAgentEnv(gym.Env):
         jump_red = red_state['jump_failed'] * 1
         jump_blue = blue_state['jump_failed'] * 1
 
+        dist_red = red_state['ball_dist'] * 1
+        dist_blue = blue_state['ball_dist'] * 1
+
         reports = {
-            "player_red": [float(score_red), float(move_red), float(kick_red), float(jump_red)],
-            "player_blue": [float(score_blue), float(move_blue), float(kick_blue), float(jump_blue)]
+            "player_red": [float(score_red), float(move_red), float(kick_red), float(jump_red), float(dist_red)],
+            "player_blue": [float(score_blue), float(move_blue), float(kick_blue), float(jump_blue), float(dist_blue)]
         }
         return reports
 
-    def comp_rewards(self, red_state: dict, blue_state: dict):
-        score_red = (red_state['scored'] - blue_state['scored']) * 100
-        score_blue = (blue_state['scored'] - red_state['scored']) * 100
+    def comp_rewards(self, red_state: dict, blue_state: dict, game_state: dict):
+        if self.setting is None:
+            score_red = (red_state['scored'] - blue_state['scored']) * 100
+            score_blue = (blue_state['scored'] - red_state['scored']) * 100
 
-        move_red = (red_state['move_towards_ball']) * 0.1
-        move_blue = (blue_state['move_towards_ball']) * 0.1
+            move_red = (red_state['move_towards_ball']) * 0.1
+            move_blue = (blue_state['move_towards_ball']) * 0.1
 
-        kick_red = red_state['kicked'] * 10
-        kick_blue = blue_state['kicked'] * 10
+            kick_red = red_state['kicked'] * 10
+            kick_blue = blue_state['kicked'] * 10
 
-        jump_red = red_state['jump_failed'] * (-1)
-        jump_blue = blue_state['jump_failed'] * (-1)
+            jump_red = red_state['jump_failed'] * (-1)
+            jump_blue = blue_state['jump_failed'] * (-1)
 
-        rewards = {
-            "player_red": score_red + move_red + kick_red + jump_red,
-            "player_blue": score_blue + move_blue + kick_blue + jump_blue
-        }
+            rewards = {
+                "player_red": score_red + move_red + kick_red + jump_red,
+                "player_blue": score_blue + move_blue + kick_blue + jump_blue
+            }
+        elif self.setting["drill"] == "block":
+            score_red = blue_state["scored"] * (-10) + (game_state["time_steps"] == 90) * 10
+            score_blue = 0
+
+            rewards = {
+                "player_red": score_red,
+                "player_blue": score_blue
+            }
         return rewards
+
+    def comp_terminateds(self, red_state: dict, blue_state: dict):
+        if self.setting is None:
+            terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
+        elif self.setting["drill"] == "block":
+            terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
+        return terminateds
+
+    def comp_truncateds(self, game_state: dict):
+        if self.setting is None:
+            truncateds = {"__all__": game_state['time_steps'] > 1800}
+        elif self.setting["drill"] == "block":
+            truncateds = {"__all__": game_state['time_steps'] > 90}
+        return truncateds

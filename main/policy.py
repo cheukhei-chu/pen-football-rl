@@ -102,7 +102,7 @@ class CurriculumMLPPolicy(FootballPolicy):
             nn.ReLU(),
         )
         self.action_net = nn.Sequential(
-            nn.Linear(12 + embed_dim, 128),
+            nn.Linear(8 + embed_dim, 128),
             nn.ReLU(),
             nn.Linear(128, 128),
             nn.ReLU(),
@@ -118,7 +118,7 @@ class CurriculumMLPPolicy(FootballPolicy):
             task_emb = self.embed_net(index_emb)
         else:
             task_emb = self.plan_net(obs)
-        x = self.action_net(torch.cat([obs, task_emb], dim=-1))
+        x = self.action_net(torch.cat([obs[:, [0, 1, 2, 3, 8, 9, 10, 11]], task_emb], dim=-1))
         return {
             "left":  self.head_left(x),
             "right": self.head_right(x),
