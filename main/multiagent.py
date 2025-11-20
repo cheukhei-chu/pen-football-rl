@@ -74,8 +74,8 @@ class FootballMultiAgentEnv(gym.Env):
             data = np.load("../samples/block.npy")
             ind = random.randint(0, 999)
             ball_obs = data[ind, :]
-            # red_obs = np.array([random.uniform(-1, ball_obs[0]), random.uniform(-1, ball_obs[1]), random.gauss(0, 3/20), random.gauss(0, 3/20)])
-            red_obs = np.array([-200/230, -130/150, 0, 0])
+            red_obs = np.array([random.uniform(-1, random.uniform(-1, ball_obs[0])), random.uniform(-1, random.uniform(-1, ball_obs[1])), random.gauss(0, 3/20), random.gauss(0, 3/20)])
+            # red_obs = np.array([-200/230, -130/150, 0, 0])
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
             self.game.preset(obs)
