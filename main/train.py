@@ -246,5 +246,5 @@ if __name__ == "__main__":
         name="block_drill_nobounce",
         policy=("CurriculumMLPPolicy", {}),
         select_drill=select_drill,
-        num_episodes=10000000, save_episodes=500, print_episodes=500
+        num_episodes=10000000, save_episodes=10000, print_episodes=1000
     )

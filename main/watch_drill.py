@@ -59,7 +59,7 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
     visualize_drill(
-        policy="../checkpoints/block_drill_nobounce/football_episode_4500.pth",
+        policy="../checkpoints/block_drill_nobounce/football_episode_500000.pth",
         select_drill=lambda: {"drill": "block_nobounce"},
         episodes=20, render=True
         )
