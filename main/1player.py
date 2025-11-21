@@ -22,6 +22,7 @@ def play_one_player(policy: FootballPolicy | str):
     pygame.display.set_caption("Pen Football - One Player")
     clock = pygame.time.Clock()
     game = FootballGame(screen)
+    # game.set_settings("drill_nobounce")
 
     def _get_obs():
         game_obs = game._get_internal_observation()
@@ -76,4 +77,4 @@ def play_one_player(policy: FootballPolicy | str):
 
 
 if __name__ == "__main__":
-    play_one_player("../checkpoints/block_drill/football_episode_100000.pth")
+    play_one_player("../checkpoints/block_drill_nobounce/football_episode_500000.pth")

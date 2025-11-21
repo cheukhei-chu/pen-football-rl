@@ -22,6 +22,7 @@ def compute_returns(rewards_list, gamma=0.99):
 
 def sim_episode(env, drill, policy_red, policy_blue, gamma=0.99):
     env.set_setting(drill)
+    policy_red.set_setting(drill)
     obs, _ = env.reset()
 
     logps_red, rewards_red, reports_red = [], [], []
@@ -245,5 +246,5 @@ if __name__ == "__main__":
         name="block_drill_nobounce",
         policy=("CurriculumMLPPolicy", {}),
         select_drill=select_drill,
-        num_episodes=10000000, save_episodes=10000, print_episodes=1000
+        num_episodes=10000000, save_episodes=500, print_episodes=500
     )

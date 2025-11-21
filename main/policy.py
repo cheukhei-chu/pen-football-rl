@@ -110,14 +110,20 @@ class CurriculumMLPPolicy(FootballPolicy):
         self.head_left  = nn.Linear(128, 2)
         self.head_right = nn.Linear(128, 2)
         self.head_jump  = nn.Linear(128, 2)
+        self.setting = None
 
-    def forward(self, obs, index=None, par=None):
-        if index:
-            assert par is not None, "par is None"
-            index_emb = torch.cat([self.index_emb(index), par], dim=-1)
-            task_emb = self.embed_net(index_emb)
-        else:
+    def set_setting(self, drill):
+        self.setting = drill
+
+    def forward(self, obs):
+        drill_to_index = {
+            "block_nobounce": torch.tensor([1], dtype=torch.long),
+        }
+        if self.setting is None:
             task_emb = self.plan_net(obs)
+        else:
+            index_emb = torch.cat([self.index_embed(drill_to_index[self.setting["drill"]]), torch.tensor([[self.setting.get("par", 0)]], dtype=torch.long)], dim=-1)
+            task_emb = self.embed_net(index_emb)
         x = self.action_net(torch.cat([obs[:, [0, 1, 2, 3, 8, 9, 10, 11]], task_emb], dim=-1))
         return {
             "left":  self.head_left(x),
