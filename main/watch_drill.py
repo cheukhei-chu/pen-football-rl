@@ -61,7 +61,7 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
     visualize_drill(
-        policy="../checkpoints/shoot_left_drill/football_episode_10500.pth",
+        policy="../checkpoints/shoot_left_drill/football_episode_35000.pth",
         select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
         episodes=10, render=True
         )

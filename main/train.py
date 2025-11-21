@@ -246,5 +246,5 @@ if __name__ == "__main__":
         name="shoot_left_drill",
         policy=("CurriculumMLPPolicy", {}),
         select_drill=select_drill,
-        num_episodes=10000000, save_episodes=10000, print_episodes=1000
+        num_episodes=10000000, save_episodes=5000, print_episodes=1000
     )
