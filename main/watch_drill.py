@@ -23,8 +23,10 @@ def visualize_drill(policy: str, select_drill, episodes=10, render=False):
     policy_red.eval()
     policy_blue.eval()
 
-    env = FootballMultiAgentEnv({"render_mode": "human" if render else None})
+    screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
+    pygame.display.set_caption("Pen Football - One Player")
     clock = pygame.time.Clock()
+    env = FootballMultiAgentEnv({"render_mode": "human" if render else None})
     scores = []
     for ep in range(episodes):
         drill = select_drill()
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
     visualize_drill(
-        policy="../checkpoints/shoot_left_drill/football_episode_1000.pth",
+        policy="../checkpoints/shoot_left_drill/football_episode_10500.pth",
         select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
         episodes=10, render=True
         )
