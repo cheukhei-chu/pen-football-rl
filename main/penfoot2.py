@@ -21,212 +21,7 @@ COLOR_WHITE = (255, 255, 255)
 COLOR_RED = (255, 0, 0)
 COLOR_BLUE = (0, 51, 255)
 
-class FootballGame:
-    """
-    A direct and faithful translation of the Scratch football game's core mechanics.
-    """
-    def __init__(self, screen=None, render_mode='human'):
-        self.screen = screen
-        self.clock = None
-        self.scale = 1
-        self.width = BASE_WIDTH * self.scale
-        self.height = BASE_HEIGHT * self.scale
-        self.render_mode = render_mode
-        self.font = None
-        self.reset()
-
-    def get_font(self):
-        """Gets font object"""
-        return pygame.font.SysFont("consolas", int(40 * self.scale))
-
-    def _s2p(self, x, y):
-        """Converts Scratch coordinates to scaled Pygame screen coordinates."""
-        return int((x * self.scale) + self.width / 2), int(self.height / 2 - (y * self.scale))
-
-    def _reset_round(self):
-        """Resets positions and velocities for a new round (e.g., after a goal)."""
-        self.ball = {'x': 0, 'y': 0, 'vx': 0, 'vy': 0}
-        self.red = {'x': -200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
-        self.blue = {'x': 200, 'y': -130, 'vx': 0, 'vy': 0, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
-
-    def _get_internal_observation(self):
-        return np.array([
-            self.red['x']/WALL_X, self.red['y']/CEILING_Y, self.red['vx']/20, self.red['vy']/20,
-            self.blue['x']/WALL_X, self.blue['y']/CEILING_Y, self.blue['vx']/20, self.blue['vy']/20,
-            self.ball['x']/WALL_X, self.ball['y']/CEILING_Y, self.ball['vx']/20, self.ball['vy']/20,
-        ], dtype=np.float32)
-
-    def reset(self):
-        """Resets the entire game to its initial state for a new episode."""
-        self._reset_round()
-        self.score_red = 0
-        self.score_blue = 0
-        self.time_steps = 0
-        return self._get_internal_observation()
-
-    def preset(self, obs):
-        """Resets the entire game to the give state for a new episode."""
-        self.ball = {'x': obs[0]*WALL_X, 'y': obs[1]*CEILING_Y, 'vx': obs[2]*20, 'vy': obs[3]*20}
-        self.red = {'x': obs[4]*WALL_X, 'y': obs[5]*CEILING_Y, 'vx': obs[6]*20, 'vy': obs[7]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
-        self.blue = {'x': obs[8]*WALL_X, 'y': obs[9]*CEILING_Y, 'vx': obs[10]*20, 'vy': obs[11]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
-        self.score_red = 0
-        self.score_blue = 0
-        self.time_steps = 0
-        return self._get_internal_observation()
-
-    def _update_player(self, player, keys):
-        jump_failed = False
-        is_on_ground = player['y'] <= GROUND_Y
-
-        if player['is_waiting_for_jump_key_release'] and not keys['jump']:
-            player['can_double_jump'] = True
-            player['is_waiting_for_jump_key_release'] = False
-
-        if keys['jump']:
-            if is_on_ground:
-                player['vy'] = 12
-                player['is_waiting_for_jump_key_release'] = True
-            elif player['can_double_jump'] and player['vy'] < 5:
-                player['vy'] = 12
-                player['can_double_jump'] = False
-            else:
-                jump_failed = True
-
-        if keys['right']: player['vx'] += 1
-        if keys['left']: player['vx'] -= 1
-
-        player['vy'] -= 1
-        player['x'] += player['vx']
-        player['y'] += player['vy']
-        player['vx'] *= 0.9
-
-        if player['x'] > WALL_X: player['x'], player['vx'] = WALL_X, 0
-        if player['x'] < -WALL_X: player['x'], player['vx'] = -WALL_X, 0
-        if player['y'] > CEILING_Y: player['y'], player['vy'] = CEILING_Y, 0
-        if player['y'] < GROUND_Y:
-            player['y'], player['vy'] = GROUND_Y, 0
-            player['can_double_jump'] = False
-            player['is_waiting_for_jump_key_release'] = False
-
-        move_towards_ball = (not keys['left'] and keys['right'] and self.ball['x'] > player['x']) or (keys['left'] and not keys['right'] and self.ball['x'] < player['x'])
-
-        return jump_failed, move_towards_ball
-
-    def _update_ball(self):
-        red_kicked = False
-        blue_kicked = False
-
-        def process_collision(player):
-            dx = self.ball['x'] - player['x']
-            self.ball['vx'] = (player['vx'] * abs(dx)) / 5 + dx / 5
-            self.ball['vy'] = player['vy'] + 10
-
-        if np.hypot(self.ball['x'] - self.red['x'], self.ball['y'] - self.red['y']) < 20:
-            process_collision(self.red)
-            red_kicked = True
-        if np.hypot(self.ball['x'] - self.blue['x'], self.ball['y'] - self.blue['y']) < 20:
-            process_collision(self.blue)
-            blue_kicked = True
-
-        self.ball['vy'] -= 1; self.ball['vx'] *= 0.97
-        self.ball['x'] += self.ball['vx']; self.ball['y'] += self.ball['vy']
-
-        if abs(self.ball['x']) > WALL_X: self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
-        if self.ball['y'] < GROUND_Y: self.ball['y'], self.ball['vy'] = GROUND_Y, self.ball['vy'] * -0.7
-        if self.ball['y'] > CEILING_Y: self.ball['y'], self.ball['vy'] = CEILING_Y, self.ball['vy'] * -0.7
-
-        if abs(self.ball['x']) > 205 and self.ball['y'] > -40 and self.ball['y'] + self.ball['vy'] <= -40:
-            self.ball['y'], self.ball['vy'] = -40, 5; self.ball['vx'] = -5 * np.sign(self.ball['x'])
-
-        return red_kicked, blue_kicked
-
-    def step(self, red_keys, blue_keys):
-        red_state, blue_state = {}, {}
-        red_state['jump_failed'], red_state['move_towards_ball'] = self._update_player(self.red, red_keys)
-        blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
-        red_state['kicked'], blue_state['kicked'] = self._update_ball()
-        red_state['scored'], blue_state['scored'] = False, False
-
-        if self.ball['y'] < -40:
-            if self.ball['x'] > 210:
-                self.score_red += 1
-                red_state['scored'] = True
-                self._reset_round()
-            elif self.ball['x'] < -210:
-                self.score_blue += 1
-                blue_state['scored'] = True
-                self._reset_round()
-
-        terminated = (self.score_red >= 10 or self.score_blue >= 10)
-
-        self.time_steps += 1
-        truncated = self.time_steps >= 1800
-
-        return self._get_internal_observation(), (red_state, blue_state), terminated, truncated, {}
-
-    def render(self):
-        if self.render_mode != 'human':
-            return
-
-        if self.screen is None:
-            # First-time setup
-            pygame.init()
-            pygame.font.init()
-            pygame.display.set_caption("Football RL")
-            self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
-            self.clock = pygame.time.Clock()
-
-        self.screen.fill(COLOR_SKY)
-
-        # Goals (drawn first)
-        for side in [-1, 1]:
-            color = COLOR_RED if side == -1 else COLOR_BLUE
-            x_post = side * 230
-
-            # --- Outline ---
-            # Vertical post as a rectangle
-            post_rect_outline_tl = self._s2p(x_post - 10, -50)
-            pygame.draw.rect(self.screen, COLOR_BLACK, (post_rect_outline_tl[0], post_rect_outline_tl[1], int(20 * self.scale), int(self.scale * 120)))
-            # Horizontal crossbar as a rectangle
-            crossbar_x_start = x_post if side == 1 else x_post - 10
-            crossbar_rect_outline_tl = self._s2p(crossbar_x_start, -40)
-            pygame.draw.rect(self.screen, COLOR_BLACK, (crossbar_rect_outline_tl[0], crossbar_rect_outline_tl[1], int(10 * self.scale), int(20 * self.scale)))
-            # Corner circle to smooth the join
-            pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(x_post, -50), int(10 * self.scale))
-
-            # --- Fill ---
-            # Vertical fill
-            post_rect_fill_tl = self._s2p(x_post - 8, -50)
-            pygame.draw.rect(self.screen, color, (post_rect_fill_tl[0], post_rect_fill_tl[1], int(16 * self.scale), int(120 * self.scale)))
-            # Horizontal fill
-            crossbar_x_fill_start = x_post if side == 1 else x_post - 8
-            crossbar_rect_fill_tl = self._s2p(crossbar_x_fill_start, -42)
-            pygame.draw.rect(self.screen, color, (crossbar_rect_fill_tl[0], crossbar_rect_fill_tl[1], int(8 * self.scale), int(16 * self.scale)))
-            # Corner circle fill
-            pygame.draw.circle(self.screen, color, self._s2p(x_post, -50), int(8 * self.scale))
-
-        # Ground (drawn over goal bottoms)
-        pygame.draw.line(self.screen, COLOR_BLACK, self._s2p(-240, -170), self._s2p(240, -170), int(20 * self.scale))
-        pygame.draw.line(self.screen, COLOR_GRASS, self._s2p(-240, -170), self._s2p(240, -170), int(16 * self.scale))
-
-        # Accurate Boundary
-        pygame.draw.rect(self.screen, COLOR_BLACK, (0, 0, self.width, self.height), int(2 * self.scale))
-
-        # Players and ball
-        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.red['x'], self.red['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_RED, self._s2p(self.red['x'], self.red['y']), int(8 * self.scale))
-        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.blue['x'], self.blue['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_BLUE, self._s2p(self.blue['x'], self.blue['y']), int(8 * self.scale))
-        pygame.draw.circle(self.screen, COLOR_BLACK, self._s2p(self.ball['x'], self.ball['y']), int(10 * self.scale)); pygame.draw.circle(self.screen, COLOR_WHITE, self._s2p(self.ball['x'], self.ball['y']), int(8 * self.scale))
-
-        score_text = self.get_font().render(f"{self.score_red} - {self.score_blue}", True, COLOR_BLACK)
-        self.screen.blit(score_text, (self.width/2 - score_text.get_width()/2, int(10 * self.scale)))
-
-        pygame.display.flip()
-
-    def close(self):
-        """Shuts down the Pygame instance if it was created."""
-        if self.screen is not None:
-            pygame.quit()
-            self.screen = None
+from pen_football import *
 
 def sample():
     while True:
@@ -235,16 +30,16 @@ def sample():
         pos_x = (random.random()-0.5)*2/230
         pos_y = min((random.random()-0.5)*2*151,150)/150
         vel_x = (random.random()-1)*30/20
-        vel_y = (random.random()-0.5)*2*20/20
+        vel_y = (random.random()-0.5)*2*10/20
         game.preset([0,0,0,0,0,0,0,0,pos_x,pos_y,vel_x,vel_y])
         for _ in range(90):
-            _, (red_state, blue_state), _, _, _ = game.step(empty,empty)
+            _, (red_state, blue_state, game_state), _, _, _,  = game.step(empty,empty)
             
             if blue_state['scored']:
                 #print("YAY")
                 return [pos_x,pos_y,vel_x,vel_y]
-            if game.ball['y']==GROUND_Y:
-                
+            if game_state['ball_hit_ground'] or game_state['ball_hit_ceiling']:
+                break
         #print("HM")
         
 
