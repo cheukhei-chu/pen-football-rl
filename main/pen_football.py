@@ -154,6 +154,7 @@ class FootballGame:
         blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
         (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']), (ball_hit_ground, ball_hit_ceiling) = self._update_ball()
         red_state['scored'], blue_state['scored'] = False, False
+        game_state['ball_x'], game_state['ball_y'] = self.ball['x']/WALL_X, self.ball['y']/CEILING_Y
 
         if self.ball['y'] < -40:
             if self.ball['x'] > 210:
@@ -173,7 +174,7 @@ class FootballGame:
         game_state['ball_hit_ground'] = ball_hit_ground
         game_state['ball_hit_ceiling'] = ball_hit_ceiling
 
-        return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {"vx": self.ball["vx"], "vy": self.ball["vy"]}
+        return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {}
 
     def render(self):
         if self.render_mode != 'human':

@@ -38,6 +38,7 @@ class FootballMultiAgentEnv(gym.Env):
             for agent in self.possible_agents
         })
         self.setting = None
+        self.history = {}
 
     def set_setting(self, drill):
         """Sets setting"""
@@ -68,6 +69,7 @@ class FootballMultiAgentEnv(gym.Env):
     # -----------------------------------------------------
 
     def reset(self, *, seed=None, options=None):
+        self.history = {}
         if self.setting is None:
             self.game.reset()
         elif self.setting["drill"] == "block":
@@ -88,8 +90,12 @@ class FootballMultiAgentEnv(gym.Env):
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
             self.game.preset(obs)
-        elif self.setting["drill"] == "shot":
-            raise NotImplementedError("Sample from some pre-computed file.")
+        elif self.setting["drill"] == "shoot_left":
+            ball_obs = np.array([random.uniform(-0.9, 0.9), np.clip(random.uniform(-1.1, 1), -1, 1), random.gauss(0, 3/20), random.gauss(0, 5/20)])
+            red_obs = np.array([random.uniform(-1, ball_obs[0]), random.uniform(-1, random.uniform(-1, ball_obs[1])), random.gauss(0, 3/20), random.gauss(0, 3/20)])
+            blue_obs = np.array([1, -1, 0, 0])
+            obs = np.concatenate([red_obs, blue_obs, ball_obs])
+            self.game.preset(obs)
         return self._get_obs(), {}
 
     # -----------------------------------------------------
@@ -118,6 +124,9 @@ class FootballMultiAgentEnv(gym.Env):
 
         terminateds = self.comp_terminateds(red_state, blue_state)
         truncateds = self.comp_truncateds(game_state)
+
+        if red_state['kicked']:
+            self.history['red_kicked'] = True
 
         return obs, rewards, terminateds, truncateds, {"reports": reports}
 
@@ -185,6 +194,16 @@ class FootballMultiAgentEnv(gym.Env):
                 "player_red": score_red,
                 "player_blue": score_blue
             }
+        elif self.setting["drill"] == "shoot_left":
+            score_red = (red_state["scored"] * (10) * (2 - game_state['time_steps'] / 180) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
+                        + (red_state["kicked"] * (1 - self.history.get("red_kicked", 0)) * 5)
+                        + (game_state["time_steps"] == 180) * (-10))
+            score_blue = 0
+
+            rewards = {
+                "player_red": score_red,
+                "player_blue": score_blue
+            }
         return rewards
 
     def comp_terminateds(self, red_state: dict, blue_state: dict):
@@ -194,13 +213,17 @@ class FootballMultiAgentEnv(gym.Env):
             terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
         elif self.setting["drill"] == "block_nobounce":
             terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
+        elif self.setting["drill"] == "shoot_left":
+            terminateds = {"__all__": red_state['scored'] or blue_state['scored']}
         return terminateds
 
     def comp_truncateds(self, game_state: dict):
         if self.setting is None:
-            truncateds = {"__all__": game_state['time_steps'] > 1800}
+            truncateds = {"__all__": game_state['time_steps'] >= 1800}
         elif self.setting["drill"] == "block":
-            truncateds = {"__all__": game_state['time_steps'] > 90}
+            truncateds = {"__all__": game_state['time_steps'] >= 90}
         elif self.setting["drill"] == "block_nobounce":
-            truncateds = {"__all__": game_state['time_steps'] > 90}
+            truncateds = {"__all__": game_state['time_steps'] >= 90}
+        elif self.setting["drill"] == "shoot_left":
+            truncateds = {"__all__": game_state['time_steps'] >= 180}
         return truncateds

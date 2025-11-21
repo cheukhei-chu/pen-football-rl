@@ -241,10 +241,10 @@ if __name__ == "__main__":
     #     policy="../checkpoints/red_league_test2/football_episode_38000.pth",
     #     num_episodes=100000, save_episodes=500, print_episodes=100
     #     )
-    select_drill = lambda: {"drill": "block_nobounce"}
+    select_drill = lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)}
     train_drill(
-        name="block_drill_nobounce",
+        name="shoot_left_drill",
         policy=("CurriculumMLPPolicy", {}),
         select_drill=select_drill,
-        num_episodes=10000000, save_episodes=10000, print_episodes=1000
+        num_episodes=10000000, save_episodes=500, print_episodes=50
     )

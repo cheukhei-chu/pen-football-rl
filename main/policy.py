@@ -118,6 +118,7 @@ class CurriculumMLPPolicy(FootballPolicy):
     def forward(self, obs):
         drill_to_index = {
             "block_nobounce": torch.tensor([1], dtype=torch.long),
+            "shoot_left": torch.tensor([2], dtype=torch.long),
         }
         if self.setting is None:
             task_emb = self.plan_net(obs)
