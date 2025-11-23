@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pygame
+import random
 
 from pen_football import *
 from policy import *
@@ -22,7 +23,8 @@ def play_one_player(policy: FootballPolicy | str):
     pygame.display.set_caption("Pen Football - One Player")
     clock = pygame.time.Clock()
     game = FootballGame(screen)
-    policy_blue.set_setting({"drill": "block_nobounce"})
+    # policy_blue.set_setting({"drill": "shoot_left", "par": random.uniform(-1, -40/150)})
+    # policy_blue.set_setting({"drill": "block_nobounce"})
 
     def _get_obs():
         game_obs = game._get_internal_observation()
@@ -77,4 +79,5 @@ def play_one_player(policy: FootballPolicy | str):
 
 
 if __name__ == "__main__":
-    play_one_player("../checkpoints/block_drill_nobounce/football_episode_500000.pth")
+    play_one_player("../checkpoints/shoot_left_ppo/checkpoint_2998272.pth")
+    # play_one_player("../checkpoints/block_nobounce_ppo/checkpoint_1933312.pth")
