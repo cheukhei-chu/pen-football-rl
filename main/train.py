@@ -312,13 +312,13 @@ def train_league_ppo(
 
     opponent_pool = []
 
+    if self_play_prob is None: self_play_prob = 1/(pool_size+1)
     def select_opponent():
         if len(opponent_pool) == 0:
             return DummyPolicy()
 
-        if self_play_prob is not None:
-            if random.random() < self_play_prob:
-                return policy_red
+        if random.random() < self_play_prob:
+            return policy_red
 
         opp_path = random.choice(opponent_pool)
         ckpt = torch.load(opp_path, map_location="cpu")
@@ -398,10 +398,18 @@ def train_league_ppo(
 ###############################################################
 
 if __name__ == "__main__":
-    train_drill_ppo(
-        name="shoot_left_ppo (sparse reward)",
+    # train_drill_ppo(
+    #     name="shoot_left_ppo (sparse reward)",
+    #     policy=("CurriculumMLPPolicy", {}),
+    #     select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
+    #     total_steps=30_000_000,
+    #     rollout_len=2048,
+    #     print_every=10_000,
+    #     save_every=100_000,
+    # )
+    train_league_ppo(
+        name="league_ppo",
         policy=("CurriculumMLPPolicy", {}),
-        select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
         total_steps=30_000_000,
         rollout_len=2048,
         print_every=10_000,

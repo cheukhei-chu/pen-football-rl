@@ -11,25 +11,30 @@ from multiagent import FootballMultiAgentEnv
 from policy import *
 from pen_football import *
 
-def visualize_drill(policy: str, select_drill, episodes=10, render=False):
+def play_zero_player(policy1: str | tuple, policy2: str, episodes=10):
     """
     Loads policies from a checkpoint file and evaluates them.
     """
-    assert os.path.exists(policy), f"Error: Checkpoint file not found at {policy}"
 
-    policy_red, _ = policy_from_checkpoint_path(policy)
-    policy_blue = DummyPolicy()
+    if isinstance(policy1, tuple):
+        pname, kwargs = policy1
+        policy_red = make_policy(pname, **kwargs)
+    else:
+        policy_red, _ = policy_from_checkpoint_path(policy1)
+
+    if isinstance(policy2, tuple):
+        pname, kwargs = policy2
+        policy_blue = make_policy(pname, **kwargs)
+    else:
+        policy_blue, _ = policy_from_checkpoint_path(policy2)
 
     policy_red.eval()
     policy_blue.eval()
 
-    env = FootballMultiAgentEnv({"render_mode": "human" if render else None})
+    env = FootballMultiAgentEnv({"render_mode": "human"})
     clock = pygame.time.Clock()
     scores = []
     for ep in range(episodes):
-        drill = select_drill()
-        env.set_setting(drill)
-        policy_red.set_setting(drill)
         obs, _ = env.reset()
         done = False
         total_reward = np.zeros(4)
@@ -45,9 +50,8 @@ def visualize_drill(policy: str, select_drill, episodes=10, render=False):
             done = terminated["__all__"] or truncated["__all__"]
             total_reward += np.array(rewards["player_red"])
 
-            if render:
-                env.render()
-                clock.tick(30)
+            env.render()
+            clock.tick(30)
 
         print(f"Episode {ep} final reward for red: {total_reward.sum():.1f} (Score: {total_reward[0]:.1f}, Move: {total_reward[1]:.1f}, Kick: {total_reward[2]:.1f}, Jump: {total_reward[3]:.1f})")
         scores.append(total_reward)
@@ -59,10 +63,8 @@ if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
-    visualize_drill(
-        policy="../checkpoints/shoot_left_ppo (sparse reward)/checkpoint_3200000.pth",
-        # policy="../checkpoints/shoot_left_ppo (without embedding)/checkpoint_409600.pth",
-        select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
-        # select_drill=lambda: {"drill": "block_nobounce"},
-        episodes=10, render=True
+    play_zero_player(
+        "../checkpoints/league_ppo/checkpoint_1600000.pth",
+        "../checkpoints/league_ppo/checkpoint_1600000.pth",
+        episodes=10,
         )
