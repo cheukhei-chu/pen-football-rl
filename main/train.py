@@ -282,16 +282,10 @@ def train_drill_ppo(name, policy, select_drill,
 ###############################################################
 
 if __name__ == "__main__":
-
-    select_drill = lambda: {
-        "drill": "shoot_left",
-        "par": random.uniform(-1, -40/150),
-    }
-
     train_drill_ppo(
-        name="shoot_left_ppo",
+        name="block_nobounce_ppo",
         policy=("CurriculumMLPPolicy", {}),
-        select_drill=select_drill,
+        select_drill=lambda: {"drill": "block_nobounce"},
         total_steps=3_000_000,
         rollout_len=2048,
         print_every=2048,
