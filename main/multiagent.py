@@ -127,6 +127,7 @@ class FootballMultiAgentEnv(gym.Env):
 
         if red_state['kicked']:
             self.history['red_kicked'] = True
+            self.history['min_red_ball_dist'] = min(self.history.get('min_red_ball_dist', float('inf')), red_state['ball_dist'])
 
         return obs, rewards, terminateds, truncateds, {"reports": reports}
 
@@ -195,8 +196,10 @@ class FootballMultiAgentEnv(gym.Env):
                 "player_blue": score_blue
             }
         elif self.setting["drill"] == "shoot_left":
-            score_red = (red_state["scored"] * (10) * (2 - game_state['time_steps'] / 180) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
-                        + (red_state["kicked"] * (1 - self.history.get("red_kicked", 0)) * 5)
+            score_red = (red_state["scored"] * (40) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
+                        + (red_state["kicked"] * (1 - self.history.get("red_kicked", 0)) * 10)
+                        + ((1 - self.history.get("red_kicked", 0)) * (min(self.history.get('min_red_ball_dist', float('inf')), red_state['ball_dist']) - 20) / 400 * (-0.1))
+                        + ((1 - red_state["scored"]) * (-0.1))
                         + (game_state["time_steps"] == 180) * (-10))
             score_blue = 0
 
@@ -225,5 +228,5 @@ class FootballMultiAgentEnv(gym.Env):
         elif self.setting["drill"] == "block_nobounce":
             truncateds = {"__all__": game_state['time_steps'] >= 90}
         elif self.setting["drill"] == "shoot_left":
-            truncateds = {"__all__": game_state['time_steps'] >= 180}
+            truncateds = {"__all__": game_state['time_steps'] >= 120}
         return truncateds
