@@ -82,6 +82,7 @@ def rollout(env, policy_red, policy_blue, select_drill,
         # ------ NEW EPISODE ------
         drill = select_drill()
         env.set_setting(drill)
+        policy_red.set_setting(drill)
         obs, _ = env.reset()
 
         done = False
@@ -174,8 +175,8 @@ def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns,
     }
 
     old_logps = torch.tensor(old_logps, dtype=torch.float32)
-    advantages = torch.tensor(advantages, dtype=torch.float32)
-    returns = torch.tensor(returns, dtype=torch.float32)
+    advantages = advantages.clone().detach().requires_grad_(True)
+    returns = returns.clone().detach().requires_grad_(True)
 
     N = len(returns)
     idxs = np.arange(N)
@@ -235,6 +236,7 @@ def train_drill_ppo(name, policy, select_drill,
     optimizer = optim.Adam(policy_red.parameters(), lr=lr)
 
     steps = 0
+    rewards_save = []
 
     while steps < total_steps:
 
@@ -265,11 +267,14 @@ def train_drill_ppo(name, policy, select_drill,
             epochs=epochs, batch_size=batch_size
         )
 
+        rewards_save.append(sum(rewards)/len(rewards))
         if steps % print_every < rollout_len:
-            print(f"[{steps}] PPO update completed | mean adv = {adv.mean():.3f}")
+            print(f"[{steps - steps % print_every}] PPO update completed | mean reward = {sum(rewards_save)/len(rewards_save):.3f}")
+            rewards_save = []
+
 
         if steps % save_every < rollout_len:
-            save_path = os.path.join(checkpoint_dir, f"checkpoint_{steps}.pth")
+            save_path = os.path.join(checkpoint_dir, f"checkpoint_{steps - steps % save_every}.pth")
             torch.save({
                 "policy_state_dict": policy_red.state_dict(),
                 "policy_class": policy_red.__class__.__name__,
@@ -283,11 +288,11 @@ def train_drill_ppo(name, policy, select_drill,
 
 if __name__ == "__main__":
     train_drill_ppo(
-        name="block_nobounce_ppo",
+        name="shoot_left_ppo (sparse reward)",
         policy=("CurriculumMLPPolicy", {}),
-        select_drill=lambda: {"drill": "block_nobounce"},
-        total_steps=3_000_000,
+        select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
+        total_steps=30_000_000,
         rollout_len=2048,
-        print_every=2048,
-        save_every=16384,
+        print_every=10_000,
+        save_every=100_000,
     )

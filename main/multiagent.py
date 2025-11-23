@@ -96,6 +96,7 @@ class FootballMultiAgentEnv(gym.Env):
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
             self.game.preset(obs)
+            self.game.draw("cross", 229/230, self.setting["par"])
         return self._get_obs(), {}
 
     # -----------------------------------------------------
@@ -196,11 +197,12 @@ class FootballMultiAgentEnv(gym.Env):
                 "player_blue": score_blue
             }
         elif self.setting["drill"] == "shoot_left":
-            score_red = (red_state["scored"] * (40) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
-                        + (red_state["kicked"] * (1 - self.history.get("red_kicked", 0)) * 10)
-                        + ((1 - self.history.get("red_kicked", 0)) * (min(self.history.get('min_red_ball_dist', float('inf')), red_state['ball_dist']) - 20) / 400 * (-0.1))
-                        + ((1 - red_state["scored"]) * (-0.1))
-                        + (game_state["time_steps"] == 180) * (-10))
+            # score_red = (red_state["scored"] * (40) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
+            #             + (red_state["kicked"] * (1 - self.history.get("red_kicked", 0)) * 10)
+            #             + ((1 - self.history.get("red_kicked", 0)) * (min(self.history.get('min_red_ball_dist', float('inf')), red_state['ball_dist']) - 20) / 400 * (-0.1))
+            #             + ((1 - red_state["scored"]) * (-0.1))
+            #             + (game_state["time_steps"] == 180) * (-10))
+            score_red = red_state["scored"] * (40) * (2 - abs(game_state['ball_y'] - self.setting["par"]))
             score_blue = 0
 
             rewards = {

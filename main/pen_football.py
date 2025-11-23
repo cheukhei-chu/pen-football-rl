@@ -32,6 +32,7 @@ class FootballGame:
         self.height = BASE_HEIGHT * self.scale
         self.render_mode = render_mode
         self.font = None
+        self.to_draw = []
         self.reset()
 
     def get_font(self):
@@ -61,6 +62,7 @@ class FootballGame:
         self.score_red = 0
         self.score_blue = 0
         self.time_steps = 0
+        self.to_draw = []
         return self._get_internal_observation()
 
     def preset(self, obs):
@@ -71,6 +73,7 @@ class FootballGame:
         self.score_red = 0
         self.score_blue = 0
         self.time_steps = 0
+        self.to_draw = []
         return self._get_internal_observation()
 
     def _update_player(self, player, keys):
@@ -176,6 +179,9 @@ class FootballGame:
 
         return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {}
 
+    def draw(self, shape, xc, yc):
+        self.to_draw.append((shape, (xc*WALL_X, yc*CEILING_Y)))
+
     def render(self):
         if self.render_mode != 'human':
             return
@@ -231,6 +237,13 @@ class FootballGame:
 
         score_text = self.get_font().render(f"{self.score_red} - {self.score_blue}", True, COLOR_BLACK)
         self.screen.blit(score_text, (self.width/2 - score_text.get_width()/2, int(10 * self.scale)))
+
+        for shape, (xc, yc) in self.to_draw:
+            if shape == 'cross':
+                pygame.draw.line(self.screen, COLOR_BLACK, self._s2p(xc - 7, yc - 7), self._s2p(xc + 7, yc + 7), 2)
+                pygame.draw.line(self.screen, COLOR_BLACK, self._s2p(xc - 7, yc + 7), self._s2p(xc + 7, yc - 7), 2)
+            else:
+                raise NotImplementedError(f'Shape {shape} not implemented')
 
         pygame.display.flip()
 
