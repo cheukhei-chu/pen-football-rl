@@ -2,249 +2,298 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import os
-import time
-import pygame
-import random
+import os, time, pygame, random
 
 from multiagent import FootballMultiAgentEnv
 from policy import *
 
-def compute_returns(rewards_list, gamma=0.99):
-    G = 0
-    returns = []
-    for r in reversed(rewards_list):
-        G = r + gamma * G
-        returns.append(G)
-    returns.reverse()
-    returns = np.array(returns)
-    return torch.tensor(returns, dtype=torch.float32)
 
-def sim_episode(env, drill, policy_red, policy_blue, gamma=0.99):
-    env.set_setting(drill)
-    policy_red.set_setting(drill)
-    obs, _ = env.reset()
+###############################################################
+# =======================  GAE  ============================= #
+###############################################################
 
-    logps_red, rewards_red, reports_red = [], [], []
-    logps_blue, rewards_blue, reports_blue = [], [], []
+def compute_gae(rewards, values, dones, last_val, gamma=0.99, lam=0.95):
+    T = len(rewards)
+    advantages = torch.zeros(T)
+    last_gae = 0.0
 
-    done = False
+    for t in reversed(range(T)):
+        next_value = last_val if t == T - 1 else values[t + 1]
+        next_non_terminal = 1.0 - float(dones[t])
 
-    while not done:
-        a_red  = policy_red.sample_action(obs["player_red"])
-        a_blue = policy_blue.sample_action(obs["player_blue"])
+        delta = rewards[t] + gamma * next_value * next_non_terminal - values[t]
+        last_gae = delta + gamma * lam * next_non_terminal * last_gae
+        advantages[t] = last_gae
 
-        next_obs, rewards, terminated, truncated, info = env.step(
-            {"player_red": a_red, "player_blue": a_blue}
-        )
-        done = terminated["__all__"] or truncated["__all__"]
+    return advantages
 
-        obs_tensor_red = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
-        logits_red = policy_red.forward(obs_tensor_red)
-        logp_r = 0
-        for key in ["left", "right", "jump"]:
-            dist = torch.distributions.Categorical(logits=logits_red[key])
-            logp_r += dist.log_prob(torch.tensor(a_red[key]))
-        logps_red.append(logp_r)
 
-        rewards_red.append(rewards["player_red"])
-        rewards_blue.append(rewards["player_blue"])
+###############################################################
+# ====================  PPO LOSS  =========================== #
+###############################################################
 
-        reports_red.append(info["reports"]["player_red"])
-        reports_blue.append(info["reports"]["player_blue"])
+def ppo_loss(policy, obs, actions, old_logps, advantages, returns,
+             clip_ratio=0.2, vf_coef=0.5, ent_coef=0.01):
 
-        obs = next_obs
+    logits = policy.forward(obs)
 
-    returns_red = compute_returns(rewards_red, gamma=gamma)
-    loss_red = -(torch.stack(logps_red) * returns_red).mean()
+    logps = []
+    entropies = []
 
-    return loss_red, (np.array(rewards_red), np.array(rewards_blue)), (np.array(reports_red), np.array(reports_blue))
+    for k in ["left", "right", "jump"]:
+        dist = torch.distributions.Categorical(logits=logits[k])
+        logps.append(dist.log_prob(actions[k]))
+        entropies.append(dist.entropy())
 
-def train_drill(name, policy: tuple[str, dict] | str, select_drill, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
-    opponent_pool = []
+    logp = sum(logps)                # shape (batch,)
+    entropy = sum(entropies)         # shape (batch,)
 
-    env = FootballMultiAgentEnv()
+    # Ensure old_logps, advantages, returns are tensors of matching shape
+    # ratio shape: (batch,)
+    ratio = torch.exp(logp - old_logps)
+    clipped_ratio = torch.clamp(ratio, 1 - clip_ratio, 1 + clip_ratio)
+    policy_loss = -torch.min(ratio * advantages, clipped_ratio * advantages).mean()
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(script_dir)
-    checkpoints_path = os.path.join(parent_dir, "checkpoints")
-    checkpoint_dir = os.path.join(checkpoints_path, name)
-    os.makedirs(checkpoint_dir, exist_ok=False)
+    value_pred = logits["value"].squeeze(-1)
+    value_loss = ((returns - value_pred) ** 2).mean()
 
-    if isinstance(policy, tuple):
-        policy_name, policy_kwargs = policy
-        policy_red = make_policy(policy_name, **policy_kwargs)
-    else:
-        policy_red, checkpoint = policy_from_checkpoint_path(policy)
-        policy_kwargs = checkpoint["policy_kwargs"]
-    policy_blue = None
+    return policy_loss + vf_coef * value_loss - ent_coef * entropy.mean()
 
-    opt_red = optim.Adam(policy_red.parameters(), lr=lr)
 
-    def select_opponent():
-        # if random.random() < 1/(len(opponent_pool)+1):
-        #     return policy_red
-        # else:
-        #     opponent_path = random.choice(opponent_pool)
-        #     checkpoint = torch.load(opponent_path)
-        #     policy = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
-        #     if checkpoint['policy_state_dict']:
-        #         policy.load_state_dict(checkpoint['policy_state_dict'])
-        #     return policy
-        return DummyPolicy()
+###############################################################
+# ===================  ROLLOUT CODE  ======================== #
+###############################################################
 
-    for episode in range(num_episodes):
-        policy_blue = select_opponent()
+def rollout(env, policy_red, policy_blue, select_drill,
+            rollout_len=2048, gamma=0.99, lam=0.95):
+
+    obs_list = []
+    act_list = {"left": [], "right": [], "jump": []}
+    logp_list = []
+    rew_list = []
+    done_list = []
+    val_list = []
+
+    steps = 0
+    obs = None
+
+    while steps < rollout_len:
+
+        # ------ NEW EPISODE ------
         drill = select_drill()
+        env.set_setting(drill)
+        obs, _ = env.reset()
 
-        loss_red, (rewards_red, rewards_blue), (reports_red, reports_blue) = sim_episode(env, drill, policy_red, policy_blue, gamma=gamma)
+        done = False
 
-        opt_red.zero_grad()
-        loss_red.backward()
-        opt_red.step()
+        while not done and steps < rollout_len:
 
-        if episode % print_episodes == 0:
-            print(f"Episode {episode}: loss red {loss_red:.1f} rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(reports_red[:, 0]):.1f}, blue {np.sum(reports_blue[:, 0]):.1f}, move red {np.sum(reports_red[:, 1]):.1f}, blue {np.sum(reports_blue[:, 1]):.1f}, kick red {np.sum(reports_red[:, 2]):.1f}, blue {np.sum(reports_blue[:, 2]):.1f}, jump red {np.sum(reports_red[:, 3]):.1f}, blue {np.sum(reports_blue[:, 3]):.1f}, dist red {np.sum(reports_red[:, 4]):.1f}, blue {np.sum(reports_blue[:, 4]):.1f}")
+            # observation for red
+            obs_tensor = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
 
-        if (episode + 1) % save_episodes == 0:
-            checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
-            print(f"Saving checkpoint to {checkpoint_path}...")
-            torch.save({
-                'episode': episode,
-                'policy_class': policy_red.__class__.__name__,
-                'policy_kwargs': policy_kwargs,
-                'policy_state_dict': policy_red.state_dict(),
-                'optimizer_state_dict': opt_red.state_dict(),
-            }, checkpoint_path)
-            opponent_pool.append(checkpoint_path)
-            if len(opponent_pool) == pool_size: opponent_pool.pop(0)
+            logits = policy_red.forward(obs_tensor)
+            value = logits["value"].item()
 
-def train_league(name, policy: tuple[str, dict] | str, num_episodes=2000, lr=1e-4, gamma=0.99, pool_size=20, print_episodes=5, save_episodes=50):
-    opponent_pool = []
+            # sample red action
+            a = {
+                k: torch.distributions.Categorical(logits=logits[k]).sample().item()
+                for k in ["left", "right", "jump"]
+            }
+
+            # compute log probability
+            logp = 0.0
+            for k in ["left", "right", "jump"]:
+                dist = torch.distributions.Categorical(logits=logits[k])
+                logp += dist.log_prob(torch.tensor(a[k])).item()
+
+            # environment step
+            next_obs, rewards, terminated, truncated, info = env.step({
+                "player_red": a,
+                "player_blue": policy_blue.sample_action(obs["player_blue"]),
+            })
+
+            done = terminated["__all__"] or truncated["__all__"]
+
+            # store transition
+            obs_list.append(obs_tensor)            # list of (1, obs_dim) tensors
+            for k in a:
+                act_list[k].append(a[k])           # list of ints
+            logp_list.append(logp)                 # list of floats
+            rew_list.append(rewards["player_red"]) # list of floats
+            done_list.append(done)                 # list of bools
+            val_list.append(value)                 # list of floats
+
+            steps += 1
+            obs = next_obs
+
+            # if we've reached rollout_len exactly mid-episode, break cleanly
+            if steps >= rollout_len:
+                break
+
+        # episode ends here — loop automatically restarts new drill
+
+    # ------ BOOTSTRAP VALUE ------
+    with torch.no_grad():
+        last_val = policy_red.forward(
+            torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
+        )["value"].item()
+
+    return {
+        "obs": obs_list,
+        "acts": act_list,
+        "logp": logp_list,
+        "rew": rew_list,
+        "done": done_list,
+        "val": val_list,
+        "last_val": last_val,
+    }
+
+
+###############################################################
+# ===================  PPO UPDATE  ========================== #
+###############################################################
+
+def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns,
+               epochs=10, batch_size=64, clip_ratio=0.2):
+    """
+    obs: list of (1,obs_dim) tensors OR a stacked tensor (N, obs_dim)
+    actions: dict of lists -> will be converted to tensors
+    old_logps: list or tensor
+    advantages, returns: tensors or lists
+    """
+
+    # ---------- Convert/stack observations ----------
+    if isinstance(obs, list):
+        obs = torch.cat(obs, dim=0)            # (N, obs_dim)
+    # else assume obs is already a tensor of shape (N, obs_dim)
+
+    # ---------- Convert actions and other lists to tensors ----------
+    actions = {
+        k: torch.tensor(v, dtype=torch.long)
+        for k, v in actions.items()
+    }
+
+    old_logps = torch.tensor(old_logps, dtype=torch.float32)
+    advantages = torch.tensor(advantages, dtype=torch.float32)
+    returns = torch.tensor(returns, dtype=torch.float32)
+
+    N = len(returns)
+    idxs = np.arange(N)
+
+    # ---------- PPO training ----------
+    for _ in range(epochs):
+        np.random.shuffle(idxs)
+
+        for start in range(0, N, batch_size):
+            end = start + batch_size
+            batch = idxs[start:end]
+            if len(batch) == 0:
+                continue
+
+            # convert batch indices to torch LongTensor for safe indexing
+            batch_idx = torch.tensor(batch, dtype=torch.long)
+
+            obs_b = obs[batch_idx]
+            act_b = {k: v[batch_idx] for k, v in actions.items()}
+            old_log_b = old_logps[batch_idx]
+            adv_b = advantages[batch_idx]
+            ret_b = returns[batch_idx]
+
+            loss = ppo_loss(
+                policy, obs_b, act_b, old_log_b, adv_b, ret_b, clip_ratio
+            )
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+
+###############################################################
+# ===============  PPO DRILL TRAINING LOOP  ================= #
+###############################################################
+def train_drill_ppo(name, policy, select_drill,
+                    total_steps=3_000_000, rollout_len=4096,
+                    lr=3e-4, gamma=0.99, lam=0.95,
+                    epochs=10, batch_size=256,
+                    print_every=10_000, save_every=100_000):
 
     env = FootballMultiAgentEnv()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
-    checkpoints_path = os.path.join(parent_dir, "checkpoints")
-    checkpoint_dir = os.path.join(checkpoints_path, name)
+    checkpoint_dir = os.path.join(parent_dir, "checkpoints", name)
     os.makedirs(checkpoint_dir, exist_ok=False)
 
+    # Load or construct policy
     if isinstance(policy, tuple):
-        policy_name, policy_kwargs = policy
-        policy_red = make_policy(policy_name, **policy_kwargs)
+        pname, kwargs = policy
+        policy_red = make_policy(pname, **kwargs)
     else:
         policy_red, checkpoint = policy_from_checkpoint_path(policy)
-        policy_kwargs = checkpoint["policy_kwargs"]
-    policy_blue = None
 
-    opt_red = optim.Adam(policy_red.parameters(), lr=lr)
+    policy_blue = DummyPolicy()
+    optimizer = optim.Adam(policy_red.parameters(), lr=lr)
 
-    def select_opponent():
-        # if random.random() < 1/(len(opponent_pool)+1):
-        #     return policy_red
-        # else:
-        #     opponent_path = random.choice(opponent_pool)
-        #     checkpoint = torch.load(opponent_path)
-        #     policy = make_policy(checkpoint['policy_class'], **checkpoint['policy_kwargs'])
-        #     if checkpoint['policy_state_dict']:
-        #         policy.load_state_dict(checkpoint['policy_state_dict'])
-        #     return policy
-        return atulPolicy()
+    steps = 0
 
-    for episode in range(num_episodes):
-        policy_blue = select_opponent()
+    while steps < total_steps:
 
-        loss_red, (rewards_red, rewards_blue), (reports_red, reports_blue) = sim_episode(env, policy_red, policy_blue, gamma=gamma)
+        # -------- GET ROLLOUT DATA --------
+        roll = rollout(
+            env, policy_red, policy_blue, select_drill,
+            rollout_len=rollout_len, gamma=gamma, lam=lam
+        )
 
-        opt_red.zero_grad()
-        loss_red.backward()
-        opt_red.step()
+        obs      = roll["obs"]       # list of tensors (1, obs_dim)
+        actions  = roll["acts"]      # dict of lists
+        old_logps= roll["logp"]      # list of floats
+        rewards  = roll["rew"]       # list of floats
+        dones    = roll["done"]      # list of bools
+        values   = roll["val"]       # list of floats
+        last_val = roll["last_val"]  # float
 
-        if episode % print_episodes == 0:
-            print(f"Episode {episode}: loss red {loss_red:.1f} rewards red {np.sum(rewards_red):.1f}, blue {np.sum(rewards_blue):.1f}, score red {np.sum(reports_red[:, 0]):.1f}, blue {np.sum(reports_blue[:, 0]):.1f}, move red {np.sum(reports_red[:, 1]):.1f}, blue {np.sum(reports_blue[:, 1]):.1f}, kick red {np.sum(reports_red[:, 2]):.1f}, blue {np.sum(reports_blue[:, 2]):.1f}, jump red {np.sum(reports_red[:, 3]):.1f}, blue {np.sum(reports_blue[:, 3]):.1f}, dist red {np.sum(reports_red[:, 4]):.1f}, blue {np.sum(reports_blue[:, 4]):.1f}")
+        steps += rollout_len
 
-        if (episode + 1) % save_episodes == 0:
-            checkpoint_path = os.path.join(checkpoint_dir, f"football_episode_{episode+1}.pth")
-            print(f"Saving checkpoint to {checkpoint_path}...")
+        # -------- COMPUTE ADV + RETURNS --------
+        adv = compute_gae(rewards, values, dones, last_val, gamma, lam)   # tensor (N,)
+        ret = adv + torch.tensor(values, dtype=torch.float32)             # tensor (N,)
+
+        # NOTE: DO NOT cat obs here; we pass the list into ppo_update which handles stacking
+        ppo_update(
+            policy_red, optimizer,
+            obs, actions, old_logps, adv, ret,
+            epochs=epochs, batch_size=batch_size
+        )
+
+        if steps % print_every < rollout_len:
+            print(f"[{steps}] PPO update completed | mean adv = {adv.mean():.3f}")
+
+        if steps % save_every < rollout_len:
+            save_path = os.path.join(checkpoint_dir, f"checkpoint_{steps}.pth")
             torch.save({
-                'episode': episode,
-                'policy_class': policy_red.__class__.__name__,
-                'policy_kwargs': policy_kwargs,
-                'policy_state_dict': policy_red.state_dict(),
-                'optimizer_state_dict': opt_red.state_dict(),
-            }, checkpoint_path)
-            opponent_pool.append(checkpoint_path)
-            if len(opponent_pool) == pool_size: opponent_pool.pop(0)
-
-def evaluate_from_checkpoint(checkpoint_path1, checkpoint_path2, episodes=10, render=False):
-    """
-    Loads policies from a checkpoint file and evaluates them.
-    """
-    assert os.path.exists(checkpoint_path1), f"Error: Checkpoint file not found at {checkpoint_path1}"
+                "policy_state_dict": policy_red.state_dict(),
+                "policy_class": policy_red.__class__.__name__,
+            }, save_path)
+            print(f"Saved checkpoint to {save_path}")
 
 
-    # Step 1: Instantiate new policy models
-    policy_red = MLPPolicy()
-    policy_blue = MLPPolicy()
-
-    if not isinstance(checkpoint_path2, FootballPolicy):
-        assert os.path.exists(checkpoint_path2), f"Error: Checkpoint file not found at {checkpoint_path2}"
-        checkpoint2 = torch.load(checkpoint_path2)
-        policy_blue.load_state_dict(checkpoint2['policy_state_dict'])
-    else:
-        policy_blue = checkpoint_path2
-
-    # Step 2: Load the checkpoint dictionary
-    print(f"Loading checkpoint from {checkpoint_path1} and {checkpoint_path2}...")
-    checkpoint = torch.load(checkpoint_path1)
-
-    # Step 3: Load the saved weights into the models
-    policy_red.load_state_dict(checkpoint['policy_state_dict'])
-
-    # Step 4: Set the models to evaluation mode
-    policy_red.eval()
-    policy_blue.eval()
-
-    env = FootballMultiAgentEnv({"render_mode": "human" if render else None})
-    clock = pygame.time.Clock()
-    scores = []
-    for ep in range(episodes):
-        obs, _ = env.reset()
-        done = False
-        total_reward = np.zeros(4)
-
-        while not done:
-            with torch.no_grad():
-                a_red = policy_red.sample_action(obs["player_red"])
-                a_blue = policy_blue.sample_action(obs["player_blue"])
-
-            obs, rewards, terminated, truncated, _ = env.step(
-                {"player_red": a_red, "player_blue": a_blue}
-            )
-            done = terminated["__all__"] or truncated["__all__"]
-            total_reward += np.array(rewards["player_red"])
-
-            if render:
-                env.render()
-                clock.tick(30)
-
-        print(f"Episode {ep} final reward for red: {total_reward.sum():.1f} (Score: {total_reward[0]:.1f}, Move: {total_reward[1]:.1f}, Kick: {total_reward[2]:.1f}, Jump: {total_reward[3]:.1f})")
-        scores.append(total_reward)
-
-    env.close()
-    return scores
+###############################################################
+# ========================= MAIN ============================ #
+###############################################################
 
 if __name__ == "__main__":
-    # train_league(
-    #     name="red_league_test3",
-    #     policy="../checkpoints/red_league_test2/football_episode_38000.pth",
-    #     num_episodes=100000, save_episodes=500, print_episodes=100
-    #     )
-    select_drill = lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)}
-    train_drill(
-        name="shoot_left_drill",
+
+    select_drill = lambda: {
+        "drill": "shoot_left",
+        "par": random.uniform(-1, -40/150),
+    }
+
+    train_drill_ppo(
+        name="shoot_left_ppo",
         policy=("CurriculumMLPPolicy", {}),
         select_drill=select_drill,
-        num_episodes=10000000, save_episodes=500, print_episodes=50
+        total_steps=3_000_000,
+        rollout_len=2048,
+        print_every=2048,
+        save_every=16384,
     )
