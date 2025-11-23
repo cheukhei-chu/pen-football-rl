@@ -79,4 +79,4 @@ def play_one_player(policy: FootballPolicy | str):
 
 
 if __name__ == "__main__":
-    play_one_player("../checkpoints/league_ppo/checkpoint_4600000.pth",)
+    play_one_player("../checkpoints/league_ppo (misc rewards)/checkpoint_5700000.pth",)

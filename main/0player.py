@@ -11,7 +11,7 @@ from multiagent import FootballMultiAgentEnv
 from policy import *
 from pen_football import *
 
-def play_zero_player(policy1: str | tuple, policy2: str, episodes=10):
+def play_zero_player(policy1: str | tuple, policy2: str, episodes=None):
     """
     Loads policies from a checkpoint file and evaluates them.
     """
@@ -72,6 +72,10 @@ if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
+    # play_zero_player(
+    #     "../checkpoints/league_ppo/checkpoint_3600000.pth",
+    #     "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
+    #     )
     play_zero_player(
         "../checkpoints/league_ppo/checkpoint_3600000.pth",
         "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
