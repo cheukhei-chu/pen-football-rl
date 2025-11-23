@@ -56,22 +56,24 @@ class FootballGame:
             self.ball['x']/WALL_X, self.ball['y']/CEILING_Y, self.ball['vx']/20, self.ball['vy']/20,
         ], dtype=np.float32)
 
-    def reset(self):
+    def reset(self, reset_score=True):
         """Resets the entire game to its initial state for a new episode."""
         self._reset_round()
-        self.score_red = 0
-        self.score_blue = 0
+        if reset_score:
+            self.score_red = 0
+            self.score_blue = 0
         self.time_steps = 0
         self.to_draw = []
         return self._get_internal_observation()
 
-    def preset(self, obs):
+    def preset(self, obs, reset_score=True):
         """Resets the entire game to the give state for a new episode."""
         self.red = {'x': obs[0]*WALL_X, 'y': obs[1]*CEILING_Y, 'vx': obs[2]*20, 'vy': obs[3]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
         self.blue = {'x': obs[4]*WALL_X, 'y': obs[5]*CEILING_Y, 'vx': obs[6]*20, 'vy': obs[7]*20, 'can_double_jump': False, 'is_waiting_for_jump_key_release': False}
         self.ball = {'x': obs[8]*WALL_X, 'y': obs[9]*CEILING_Y, 'vx': obs[10]*20, 'vy': obs[11]*20}
-        self.score_red = 0
-        self.score_blue = 0
+        if reset_score:
+            self.score_red = 0
+            self.score_blue = 0
         self.time_steps = 0
         self.to_draw = []
         return self._get_internal_observation()

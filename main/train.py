@@ -331,20 +331,15 @@ def train_league_ppo(
     steps = 0
     rewards_save = []
 
-    # ------------------------
-    # MAIN TRAINING LOOP
-    # ------------------------
     while steps < total_steps:
 
-        # pick opponent for this rollout
         policy_blue = select_opponent()
 
-        # ---------- COLLECT ROLLOUT ----------
         roll = rollout(
             env,
             policy_red,
             policy_blue,
-            select_drill=lambda: None,      # since this is full game self-play
+            select_drill=lambda: None,
             rollout_len=rollout_len,
             gamma=gamma,
             lam=lam
@@ -408,7 +403,7 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo(
-        name="league_ppo",
+        name="league_ppo (score reward)",
         policy=("CurriculumMLPPolicy", {}),
         total_steps=30_000_000,
         rollout_len=2048,

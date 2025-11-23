@@ -68,10 +68,10 @@ class FootballMultiAgentEnv(gym.Env):
 
     # -----------------------------------------------------
 
-    def reset(self, *, seed=None, options=None):
+    def reset(self, *, seed=None, options=None, reset_score=True):
         self.history = {}
         if self.setting is None:
-            self.game.reset()
+            self.game.reset(reset_score=reset_score)
         elif self.setting["drill"] == "block":
             data = np.load("../samples/block.npy")
             ind = random.randint(0, 999)
@@ -80,7 +80,7 @@ class FootballMultiAgentEnv(gym.Env):
             # red_obs = np.array([-200/230, -130/150, 0, 0])
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
-            self.game.preset(obs)
+            self.game.preset(obs, reset_score=reset_score)
         elif self.setting["drill"] == "block_nobounce":
             data = np.load("../samples/block_nobounce.npy")
             ind = random.randint(0, 999)
@@ -89,13 +89,13 @@ class FootballMultiAgentEnv(gym.Env):
             # red_obs = np.array([-200/230, -130/150, 0, 0])
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
-            self.game.preset(obs)
+            self.game.preset(obs, reset_score=reset_score)
         elif self.setting["drill"] == "shoot_left":
             ball_obs = np.array([random.uniform(-0.9, 0.9), np.clip(random.uniform(-1.1, 1), -1, 1), random.gauss(0, 3/20), random.gauss(0, 5/20)])
             red_obs = np.array([random.uniform(-1, ball_obs[0]), random.uniform(-1, random.uniform(-1, ball_obs[1])), random.gauss(0, 3/20), random.gauss(0, 3/20)])
             blue_obs = np.array([1, -1, 0, 0])
             obs = np.concatenate([red_obs, blue_obs, ball_obs])
-            self.game.preset(obs)
+            self.game.preset(obs, reset_score=reset_score)
             self.game.draw("cross", 229/230, self.setting["par"])
         return self._get_obs(), {}
 
@@ -177,8 +177,10 @@ class FootballMultiAgentEnv(gym.Env):
             jump_blue = blue_state['jump_failed'] * (-1)
 
             rewards = {
-                "player_red": score_red + move_red + kick_red + jump_red,
-                "player_blue": score_blue + move_blue + kick_blue + jump_blue
+                # "player_red": score_red + move_red + kick_red + jump_red,
+                "player_red": score_red,
+                # "player_blue": score_blue + move_blue + kick_blue + jump_blue
+                "player_blue": score_blue,
             }
         elif self.setting["drill"] == "block":
             score_red = blue_state["scored"] * (-10) + (game_state["time_steps"] == 90) * 10

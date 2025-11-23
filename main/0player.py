@@ -34,8 +34,9 @@ def play_zero_player(policy1: str | tuple, policy2: str, episodes=10):
     env = FootballMultiAgentEnv({"render_mode": "human"})
     clock = pygame.time.Clock()
     scores = []
-    for ep in range(episodes):
-        obs, _ = env.reset()
+    ep = 0
+    while True:
+        obs, _ = env.reset(reset_score=False)
         done = False
         total_reward = np.zeros(4)
 
@@ -56,6 +57,14 @@ def play_zero_player(policy1: str | tuple, policy2: str, episodes=10):
         print(f"Episode {ep} final reward for red: {total_reward.sum():.1f} (Score: {total_reward[0]:.1f}, Move: {total_reward[1]:.1f}, Kick: {total_reward[2]:.1f}, Jump: {total_reward[3]:.1f})")
         scores.append(total_reward)
 
+        ep += 1
+        if episodes:
+            if ep == episodes:
+                break
+        else:
+            if env.game.score_red == 10 or env.game.score_blue == 10:
+                break
+
     env.close()
     return scores
 
@@ -64,7 +73,6 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
     play_zero_player(
-        "../checkpoints/league_ppo/checkpoint_1600000.pth",
-        "../checkpoints/league_ppo/checkpoint_1600000.pth",
-        episodes=10,
+        "../checkpoints/league_ppo/checkpoint_3600000.pth",
+        "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
         )
