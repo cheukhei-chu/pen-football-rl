@@ -231,6 +231,7 @@ def train_drill_ppo(name, policy, select_drill,
         policy_red = make_policy(pname, **kwargs)
     else:
         policy_red, checkpoint = policy_from_checkpoint_path(policy)
+        policy_kwargs = checkpoint["policy_kwargs"]
 
     policy_blue = DummyPolicy()
     optimizer = optim.Adam(policy_red.parameters(), lr=lr)
@@ -278,8 +279,118 @@ def train_drill_ppo(name, policy, select_drill,
             torch.save({
                 "policy_state_dict": policy_red.state_dict(),
                 "policy_class": policy_red.__class__.__name__,
+                "policy_kwargs": policy_kwargs
             }, save_path)
             print(f"Saved checkpoint to {save_path}")
+
+def train_league_ppo(
+    name, policy,
+    total_steps=3_000_000, rollout_len=4096,
+    lr=3e-4, gamma=0.99, lam=0.95,
+    epochs=10, batch_size=256,
+    pool_size=20,
+    self_play_prob=None,
+    print_every=10_000, save_every=50_000
+):
+
+    env = FootballMultiAgentEnv()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    checkpoint_dir = os.path.join(parent_dir, "checkpoints", name)
+    os.makedirs(checkpoint_dir, exist_ok=False)
+
+    if isinstance(policy, tuple):
+        pname, kwargs = policy
+        policy_red = make_policy(pname, **kwargs)
+        policy_kwargs = kwargs
+    else:
+        policy_red, checkpoint = policy_from_checkpoint_path(policy)
+        policy_kwargs = checkpoint["policy_kwargs"]
+
+    optimizer = optim.Adam(policy_red.parameters(), lr=lr)
+
+    opponent_pool = []
+
+    def select_opponent():
+        if len(opponent_pool) == 0:
+            return DummyPolicy()
+
+        if self_play_prob is not None:
+            if random.random() < self_play_prob:
+                return policy_red
+
+        opp_path = random.choice(opponent_pool)
+        ckpt = torch.load(opp_path, map_location="cpu")
+
+        opponent = make_policy(ckpt["policy_class"], **ckpt["policy_kwargs"])
+        opponent.load_state_dict(ckpt["policy_state_dict"])
+        opponent.eval()
+        return opponent
+
+    steps = 0
+    rewards_save = []
+
+    # ------------------------
+    # MAIN TRAINING LOOP
+    # ------------------------
+    while steps < total_steps:
+
+        # pick opponent for this rollout
+        policy_blue = select_opponent()
+
+        # ---------- COLLECT ROLLOUT ----------
+        roll = rollout(
+            env,
+            policy_red,
+            policy_blue,
+            select_drill=lambda: None,      # since this is full game self-play
+            rollout_len=rollout_len,
+            gamma=gamma,
+            lam=lam
+        )
+
+        obs      = roll["obs"]
+        actions  = roll["acts"]
+        old_logps= roll["logp"]
+        rewards  = roll["rew"]
+        dones    = roll["done"]
+        values   = roll["val"]
+        last_val = roll["last_val"]
+
+        steps += rollout_len
+
+        adv = compute_gae(rewards, values, dones, last_val, gamma, lam)
+        ret = adv + torch.tensor(values, dtype=torch.float32)
+
+        ppo_update(
+            policy_red, optimizer,
+            obs, actions, old_logps, adv, ret,
+            epochs=epochs, batch_size=batch_size
+        )
+
+        rewards_save.append(sum(rewards)/len(rewards))
+        if steps % print_every < rollout_len:
+            print(f"[{steps - (steps % print_every)}] PPO update | mean reward = {sum(rewards_save)/len(rewards_save):.3f}")
+            rewards_save = []
+
+        if steps % save_every < rollout_len:
+            save_path = os.path.join(
+                checkpoint_dir,
+                f"checkpoint_{steps - (steps % save_every)}.pth"
+            )
+            torch.save({
+                "policy_state_dict": policy_red.state_dict(),
+                "policy_class": policy_red.__class__.__name__,
+                "policy_kwargs": policy_kwargs
+            }, save_path)
+
+            print(f"Saved checkpoint to {save_path}")
+
+            opponent_pool.append(save_path)
+            if len(opponent_pool) > pool_size:
+                opponent_pool.pop(0)
+
 
 
 ###############################################################
