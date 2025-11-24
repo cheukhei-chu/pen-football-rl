@@ -77,6 +77,6 @@ if __name__ == "__main__":
     #     "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
     #     )
     play_zero_player(
-        "../checkpoints/league_ppo (misc rewards)/checkpoint_7700000.pth",
-        "../checkpoints/league_ppo (misc rewards)/checkpoint_6700000.pth",
+        "../checkpoints/league_ppo (misc rewards)/checkpoint_10000000.pth",
+        "../checkpoints/league_ppo (misc rewards)/checkpoint_9000000.pth",
         )
