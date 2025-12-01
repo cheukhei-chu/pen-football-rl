@@ -264,6 +264,62 @@ class CurriculumMLPPolicy(FootballPolicy):
                 out[k] = int(dist.sample()[0].item())
         return out
 
+# -------------------------
+# RegularMLPPolicy (simple MLP using same obs subset as Curriculum, with value head)
+# -------------------------
+class RegularMLPPolicy(FootballPolicy):
+    def __init__(self, obs_dim=12):
+        """
+        A plain MLP policy that uses the same 8-element observation subset as
+        CurriculumMLPPolicy (indices [0,1,2,3,8,9,10,11]) but has no planning/embedding.
+        Produces logits for left/right/jump and a scalar value.
+        """
+        super().__init__()
+        self.obs_dim = obs_dim
+
+        # action network: takes the 8-element subset and produces a 128-d representation
+        self.action_net = nn.Sequential(
+            nn.Linear(8, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+        )
+        self.head_left  = nn.Linear(128, 2)
+        self.head_right = nn.Linear(128, 2)
+        self.head_jump  = nn.Linear(128, 2)
+
+        # value head on top of same representation
+        self.value_head = nn.Linear(128, 1)
+
+    def forward(self, obs: torch.Tensor):
+        """
+        obs: (batch, obs_dim)
+        returns dict with logits for each action and "value": (batch,1)
+        """
+        # pick the relevant obs features: [0,1,2,3,8,9,10,11]
+        obs_subset = obs[:, [0, 1, 2, 3, 8, 9, 10, 11]]  # (batch, 8)
+        x = self.action_net(obs_subset)  # (batch, 128)
+
+        return {
+            "left":  self.head_left(x),
+            "right": self.head_right(x),
+            "jump":  self.head_jump(x),
+            "value": self.value_head(x),
+        }
+
+    def sample_action(self, obs):
+        """Sample action from a single observation (numpy array or 1D tensor)."""
+        obs_t = _to_tensor(obs)  # (1, obs_dim)
+        with torch.no_grad():
+            logits = self.forward(obs_t)
+            out = {}
+            for k in ("left", "right", "jump"):
+                dist = torch.distributions.Categorical(logits=logits[k])
+                out[k] = int(dist.sample()[0].item())
+        return out
+    
+    def set_setting(self,setting):
+        pass
 
 # -------------------------
 # Factory + checkpoint loader
@@ -273,6 +329,7 @@ def make_policy(class_name, **kwargs):
     name_to_class = {
         "MLPPolicy": MLPPolicy,
         "CurriculumMLPPolicy": CurriculumMLPPolicy,
+        "RegularMLPPolicy":RegularMLPPolicy,
         "DummyPolicy": DummyPolicy,
         "atulPolicy": atulPolicy,
     }

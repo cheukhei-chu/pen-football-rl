@@ -6,7 +6,7 @@ import os, time, pygame, random
 
 from multiagent import FootballMultiAgentEnv
 from policy import *
-
+from collections import deque, defaultdict
 
 ###############################################################
 # =======================  GAE  ============================= #
@@ -386,6 +386,171 @@ def train_league_ppo(
             if len(opponent_pool) > pool_size:
                 opponent_pool.pop(0)
 
+def train_league_ppo_real(
+    name, policy,
+    total_steps=3_000_000, rollout_len=4096,
+    lr=3e-4, gamma=0.99, lam=0.95,
+    epochs=10, batch_size=256,
+    pool_size=20,
+    self_play_prob=None,
+    print_every=10_000, save_every=50_000,
+    eval_win_window=20,         # number of recent matches to track per opponent
+    difficulty_alpha=2.0,       # skew exponent for weighting (>=1 -> more skew)
+    min_opponent_weight=1e-3,   # don't let weight go to zero
+):
+    env = FootballMultiAgentEnv()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    checkpoint_dir = os.path.join(parent_dir, "checkpoints", name)
+    os.makedirs(checkpoint_dir, exist_ok=False)
+
+    # Load or construct policy
+    if isinstance(policy, tuple):
+        pname, kwargs = policy
+        policy_red = make_policy(pname, **kwargs)
+        policy_kwargs = kwargs
+    else:
+        policy_red, checkpoint = policy_from_checkpoint_path(policy)
+        policy_kwargs = checkpoint["policy_kwargs"]
+
+    optimizer = optim.Adam(policy_red.parameters(), lr=lr)
+
+    # ---------- Opponent pool + bookkeeping ----------
+    opponent_pool = []  # list of checkpoint file paths
+    # For each opponent checkpoint path we keep a deque of last eval_win_window results (1 = learner win, 0 = loss)
+    win_history = defaultdict(lambda: deque(maxlen=eval_win_window))
+
+    if self_play_prob is None:
+        self_play_prob = 1.0 / (pool_size + 1)
+
+    def compute_win_rate(opponent_path):
+        hist = win_history.get(opponent_path, None)
+        if hist is None or len(hist) == 0:
+            return 0.5  # unknown opponents treated as 50/50 initially
+        return float(sum(hist)) / len(hist)
+
+    def opponent_weight(opponent_path):
+        # weight should be higher when learner has LOWER win rate vs that opponent
+        win_rate = compute_win_rate(opponent_path)
+        difficulty = 1.0 - win_rate
+        # exponentiate to control skew; ensure nonzero
+        return max(min_opponent_weight, (difficulty ** difficulty_alpha))
+
+    def select_opponent_weighted():
+        # If no opponents yet, return DummyPolicy
+        if len(opponent_pool) == 0:
+            return None  # signal to use DummyPolicy
+
+        # With small probability pick self (self-play)
+        if random.random() < self_play_prob:
+            return "self"
+
+        # weighted sample from opponent_pool by difficulty
+        weights = [opponent_weight(p) for p in opponent_pool]
+        total = sum(weights)
+        if total <= 0:
+            # fallback to uniform
+            choice = random.choice(opponent_pool)
+            return choice
+        probs = [w / total for w in weights]
+        choice = random.choices(opponent_pool, weights=probs, k=1)[0]
+        return choice
+
+    def load_opponent_from_path(ckpt_path):
+        ckpt = torch.load(ckpt_path, map_location="cpu")
+        opponent = make_policy(ckpt["policy_class"], **ckpt["policy_kwargs"])
+        opponent.load_state_dict(ckpt["policy_state_dict"])
+        opponent.eval()
+        return opponent
+
+    def record_result_vs_opponent(opponent_path, learner_score):
+        """
+        learner_score: numeric performance metric from rollout vs opponent (higher = better).
+        For simplicity we treat learner_score > 0 as win; customize as needed.
+        """
+        if opponent_path is None or opponent_path == "self":
+            return
+        win = 1 if learner_score > 0 else 0
+        win_history[opponent_path].append(win)
+
+    # ---------- training loop ----------
+    steps = 0
+    rewards_save = []
+
+    while steps < total_steps:
+        # pick and load opponent
+        opp_choice = select_opponent_weighted()
+        if opp_choice is None:
+            policy_blue = DummyPolicy()
+            opp_path_for_record = None
+        elif opp_choice == "self":
+            policy_blue = policy_red
+            opp_path_for_record = "self"
+        else:
+            policy_blue = load_opponent_from_path(opp_choice)
+            opp_path_for_record = opp_choice
+
+        # -------- GET ROLLOUT DATA --------
+        roll = rollout(
+            env,
+            policy_red,
+            policy_blue,
+            select_drill=lambda: None,
+            rollout_len=rollout_len,
+            gamma=gamma, lam=lam
+        )
+
+        obs      = roll["obs"]
+        actions  = roll["acts"]
+        old_logps= roll["logp"]
+        rewards  = roll["rew"]
+        dones    = roll["done"]
+        values   = roll["val"]
+        last_val = roll["last_val"]
+
+        # Compute a simple scalar metric of learner performance vs opponent over this rollout:
+        # you can replace this with per-episode result processing if you want.
+        learner_score = float(np.mean(rewards))  # average time-step reward across rollout
+        record_result_vs_opponent(opp_path_for_record, learner_score)
+
+        steps += rollout_len
+
+        adv = compute_gae(rewards, values, dones, last_val, gamma, lam)
+        ret = adv + torch.tensor(values, dtype=torch.float32)
+
+        ppo_update(
+            policy_red, optimizer,
+            obs, actions, old_logps, adv, ret,
+            epochs=epochs, batch_size=batch_size
+        )
+
+        rewards_save.append(sum(rewards)/len(rewards))
+        if steps % print_every < rollout_len:
+            print(f"[{steps - (steps % print_every)}] PPO update | mean reward = {sum(rewards_save)/len(rewards_save):.3f}")
+            rewards_save = []
+
+        # ---------- periodic save & add to pool ----------
+        if steps % save_every < rollout_len:
+            save_path = os.path.join(
+                checkpoint_dir,
+                f"checkpoint_{steps - (steps % save_every)}.pth"
+            )
+            torch.save({
+                "policy_state_dict": policy_red.state_dict(),
+                "policy_class": policy_red.__class__.__name__,
+                "policy_kwargs": policy_kwargs
+            }, save_path)
+
+            print(f"Saved checkpoint to {save_path}")
+
+            # add to opponent pool
+            opponent_pool.append(save_path)
+            if len(opponent_pool) > pool_size:
+                # drop oldest from both pool and win_history
+                removed = opponent_pool.pop(0)
+                if removed in win_history:
+                    del win_history[removed]
 
 
 ###############################################################
@@ -403,8 +568,8 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo(
-        name="league_ppo (score reward)",
-        policy=("CurriculumMLPPolicy", {}),
+        name="league_ppo_regular (score reward)",
+        policy=("RegularMLPPolicy", {}),
         total_steps=30_000_000,
         rollout_len=2048,
         print_every=10_000,
