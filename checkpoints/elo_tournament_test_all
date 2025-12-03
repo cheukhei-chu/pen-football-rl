@@ -1,0 +1,11 @@
+model,rating,games,wins,draws
+league_ppo (misc rewards)_checkpoint_6800000.pth,1780.9123190069106,402,320,7
+league_ppo_real (score reward)_checkpoint_3400000.pth,1658.078214192979,383,248,5
+league_ppo_real (score reward)_checkpoint_2200000.pth,1620.6167373809024,394,222,15
+league_ppo_regular (score reward)_checkpoint_4900000.pth,1535.8709766996928,400,232,19
+shoot_left_ppo (without embedding)_checkpoint_1982464.pth,1521.1354481376318,378,222,7
+league_ppo_real (score reward)_checkpoint_7300000.pth,1503.2835305111826,415,194,19
+shoot_left_ppo (without embedding)_checkpoint_835584.pth,1427.7699054298107,419,184,7
+shoot_left_ppo (without embedding)_checkpoint_1146880.pth,1340.9803860398154,399,138,5
+league_ppo_real (score reward)_checkpoint_10400000.pth,1314.8674061763043,410,74,54
+league_ppo (score reward)_checkpoint_8600000.pth,1296.4850764247717,400,64,66
