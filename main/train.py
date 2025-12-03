@@ -567,9 +567,17 @@ if __name__ == "__main__":
     #     print_every=10_000,
     #     save_every=100_000,
     # )
-    train_league_ppo(
-        name="league_ppo_regular (score reward)",
-        policy=("RegularMLPPolicy", {}),
+    # train_league_ppo(
+    #     name="league_ppo_regular (score reward)",
+    #     policy=("RegularMLPPolicy", {}),
+    #     total_steps=30_000_000,
+    #     rollout_len=2048,
+    #     print_every=10_000,
+    #     save_every=100_000,
+    # )
+     train_league_ppo(
+        name="league_ppo_real (score reward)",
+        policy=("CurriculumMLPPolicy", {}),
         total_steps=30_000_000,
         rollout_len=2048,
         print_every=10_000,

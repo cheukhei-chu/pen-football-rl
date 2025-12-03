@@ -1,3 +1,16 @@
 PPO does not work, REINFORCE does- likely because of the many useless states and lack of use of most immediate movements
 
 Training in 
+
+TODO
+
+ELO Rating
+Round robin tournament to see win rates
+Real curriculum learning
+
+20 million league_ppo
+
+Save current points table regularly
+Plot results (can do later)
+Add atulPolicy and shift
+Start with few and mix new ones in
