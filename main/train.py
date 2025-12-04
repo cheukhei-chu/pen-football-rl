@@ -587,6 +587,7 @@ if __name__ == "__main__":
     #     print_every=10_000,
     #     save_every=100_000,
     # )
+<<<<<<< HEAD
     # train_league_ppo(
     #     name="league_ppo_real (score reward)",
     #     policy=("CurriculumMLPPolicy", {}),
@@ -595,3 +596,13 @@ if __name__ == "__main__":
     #     print_every=10_000,
     #     save_every=100_000,
     # )
+=======
+     train_league_ppo_real(
+        name="league_ppo_real (score reward) (latent_dims 128 128 128)",
+        policy=("CurriculumMLPPolicyScaled", {"latent_dims": [128, 128, 128]}),
+        total_steps=30_000_000,
+        rollout_len=2048,
+        print_every=10_000,
+        save_every=100_000,
+    )
+>>>>>>> 0183046 (scaled checkpoints)
