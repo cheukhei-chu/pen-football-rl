@@ -1,0 +1,74 @@
+model,rating,games,wins,draws
+baseline_league_ppo (misc rewards)_checkpoint_7100000.pth,2315.17,554,539,5
+baseline_league_ppo_real (score reward)_checkpoint_12500000.pth,2165.42,554,523,7
+baseline_league_ppo (score reward)_checkpoint_22000000.pth,2146.14,528,501,4
+baseline_league_ppo (score reward)_checkpoint_3800000.pth,2122.81,587,560,3
+baseline_league_ppo_regular (score reward)_checkpoint_4200000.pth,2075.80,550,509,24
+baseline_league_ppo_real (score reward) checkpoint_2100000.pth,2019.51,530,496,10
+baseline_league_ppo (misc rewards)_checkpoint_1100000.pth,1933.92,530,466,17
+baseline_league_ppo_regular (score reward)_checkpoint_1000000.pth,1872.53,558,469,38
+baseline_league_ppo_regular (score reward)_checkpoint_10100000.pth,1862.21,562,413,116
+baseline_league_ppo (score reward)_checkpoint_12500000.pth,1714.81,566,324,117
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4900000.pth,1676.28,100,22,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4800000.pth,1664.24,100,24,9
+baseline_league_ppo (misc rewards)_checkpoint_8300000.pth,1647.86,581,288,96
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3600000.pth,1644.58,100,22,2
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2400000.pth,1632.07,100,12,19
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2000000.pth,1620.36,100,15,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3700000.pth,1614.28,100,12,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5600000.pth,1609.64,100,9,10
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3300000.pth,1604.55,100,14,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7400000.pth,1604.19,100,8,12
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2300000.pth,1604.13,100,11,13
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3500000.pth,1602.63,100,12,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2200000.pth,1601.86,100,5,24
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3000000.pth,1598.32,100,10,10
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2800000.pth,1597.35,100,10,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7000000.pth,1596.34,100,13,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4300000.pth,1592.67,100,16,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4500000.pth,1588.66,100,12,12
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7500000.pth,1581.60,100,5,17
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5400000.pth,1580.91,100,12,11
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7700000.pth,1580.46,100,8,17
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5200000.pth,1580.34,100,13,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_700000.pth,1577.63,100,13,4
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1700000.pth,1573.17,100,16,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7100000.pth,1570.57,100,7,10
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6900000.pth,1567.07,100,10,11
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2100000.pth,1567.01,100,5,15
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1600000.pth,1564.42,100,12,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5700000.pth,1563.86,100,8,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4200000.pth,1560.10,100,13,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_600000.pth,1554.11,100,17,1
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3800000.pth,1553.14,100,8,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5800000.pth,1552.53,100,10,3
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5500000.pth,1551.88,100,9,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3200000.pth,1542.02,100,15,2
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3100000.pth,1536.52,100,7,1
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6600000.pth,1535.64,100,5,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4000000.pth,1534.48,100,7,4
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_900000.pth,1532.98,100,9,3
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3400000.pth,1529.24,100,10,3
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_7600000.pth,1528.16,100,8,10
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4100000.pth,1526.91,100,1,10
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6200000.pth,1526.85,100,10,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_4400000.pth,1523.76,100,6,1
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2500000.pth,1521.92,100,7,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5300000.pth,1520.44,100,5,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_800000.pth,1520.01,100,5,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_100000.pth,1511.16,100,12,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6800000.pth,1508.86,100,5,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1500000.pth,1507.77,100,6,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6700000.pth,1506.02,100,7,8
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_3900000.pth,1503.24,100,4,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_5900000.pth,1502.99,100,7,3
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_200000.pth,1502.82,100,9,3
+atulPolicy,1500.00,0,0,0
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_300000.pth,1492.34,100,5,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1100000.pth,1487.93,100,6,7
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1400000.pth,1485.77,100,5,4
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_2900000.pth,1484.78,100,5,3
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6300000.pth,1478.19,100,4,1
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6100000.pth,1473.47,100,5,5
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_6000000.pth,1468.24,100,4,6
+league_ppo_regular_real (score reward) (latent_dims 128 11 128 128)_checkpoint_1000000.pth,1454.94,100,3,6

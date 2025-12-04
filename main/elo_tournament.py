@@ -449,7 +449,7 @@ if __name__ == "__main__":
     #     "../checkpoints/league_ppo_regular (score reward)",
     #     "../checkpoints/shoot_left_ppo (without embedding)",
     # ]
-    model_folders = ["../checkpoints/league_ppo_real (score reward) (latent_dims 128 128 128)"]
+    model_folders = ["../checkpoints/league_ppo_regular_real (score reward) (latent_dims 128 128)"]
     baseline_path = "../checkpoints/elo_tournament_baseline"
     baseline_rating_path = "../results/baseline_ratings.txt"
     # baseline_ratings = run_baseline_tournament(
@@ -467,7 +467,7 @@ if __name__ == "__main__":
         K=16,
         baseline_path=baseline_path,
         print_every=10,                      # show only baseline + newest model
-        save_path="results/incremental_elo_2.csv",
+        save_path="results/incremental_elo_4.csv",
         device="cpu"
     )
 
