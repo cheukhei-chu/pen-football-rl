@@ -60,9 +60,19 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
     visualize_drill(
-        policy="../checkpoints/shoot_left_ppo (sparse reward)/checkpoint_3200000.pth",
-        # policy="../checkpoints/shoot_left_ppo (without embedding)/checkpoint_409600.pth",
-        select_drill=lambda: {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
-        # select_drill=lambda: {"drill": "block_nobounce"},
+        policy="../checkpoints/misc_drill/checkpoint_25700000.pth",
+        select_drill=lambda: random.choices([
+            # {"drill": "block"},
+            # {"drill": "block_nobounce"},
+            {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
+            # {"drill": "shoot_right", "par": random.uniform(-1, -40/150)},
+            # {"drill": "hit_left_wall", "par": random.uniform(-40/150, 1)},
+            # {"drill": "hit_right_wall", "par": random.uniform(-40/150, 1)},
+            # {"drill": "volley", "par": random.uniform(-0.9, 0.3)},
+            # {"drill": "prepare", "par": random.uniform(-1, 1)},
+        ],
+        # [0.1, 0.2, 0.15, 0.15, 0.1, 0.1, 0.1, 0.1],
+        [1],
+        )[0],
         episodes=10, render=True
         )

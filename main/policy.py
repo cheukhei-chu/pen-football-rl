@@ -207,8 +207,14 @@ class CurriculumMLPPolicy(FootballPolicy):
 
         # mapping from drill name to small integer index (keep in sync with index_embed size)
         self.drill_to_index = {
-            "block_nobounce": 1,
-            "shoot_left": 2,
+            "block": 1,
+            "block_nobounce": 2,
+            "shoot_left": 3,
+            "shoot_right": 4,
+            "hit_left_wall": 5,
+            "hit_right_wall": 6,
+            "volley": 7,
+            "prepare": 8,
         }
 
     def set_setting(self, drill):
@@ -317,7 +323,7 @@ class RegularMLPPolicy(FootballPolicy):
                 dist = torch.distributions.Categorical(logits=logits[k])
                 out[k] = int(dist.sample()[0].item())
         return out
-    
+
     def set_setting(self,setting):
         pass
 

@@ -121,6 +121,8 @@ class FootballGame:
         blue_kicked = False
         ball_hit_ground = False
         ball_hit_ceiling = False
+        ball_hit_left_wall = False
+        ball_hit_right_wall = False
 
         def process_collision(player):
             dx = self.ball['x'] - player['x']
@@ -140,7 +142,14 @@ class FootballGame:
         self.ball['vy'] -= 1; self.ball['vx'] *= 0.97
         self.ball['x'] += self.ball['vx']; self.ball['y'] += self.ball['vy']
 
-        if abs(self.ball['x']) > WALL_X: self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
+        if self.ball['x'] > WALL_X:
+            self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
+            ball_hit_right_wall = True
+
+        if self.ball['x'] < -WALL_X:
+            self.ball['x'], self.ball['vx'] = np.sign(self.ball['x']) * WALL_X, self.ball['vx'] * -0.7
+            ball_hit_left_wall = True
+
         if self.ball['y'] < GROUND_Y:
             ball_hit_ground = True
             self.ball['y'], self.ball['vy'] = GROUND_Y, self.ball['vy'] * -0.7
@@ -151,14 +160,15 @@ class FootballGame:
         if abs(self.ball['x']) > 205 and self.ball['y'] > -40 and self.ball['y'] + self.ball['vy'] <= -40:
             self.ball['y'], self.ball['vy'] = -40, 5; self.ball['vx'] = -5 * np.sign(self.ball['x'])
 
-        return (red_ball_dist, red_kicked), (blue_ball_dist, blue_kicked), (ball_hit_ground, ball_hit_ceiling)
+        return (red_ball_dist, red_kicked), (blue_ball_dist, blue_kicked), (ball_hit_ground, ball_hit_ceiling, ball_hit_left_wall, ball_hit_right_wall)
 
     def step(self, red_keys, blue_keys):
         red_state, blue_state, game_state = {}, {}, {}
         red_state['jump_failed'], red_state['move_towards_ball'] = self._update_player(self.red, red_keys)
         blue_state['jump_failed'], blue_state['move_towards_ball'] = self._update_player(self.blue, blue_keys)
-        (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']), (ball_hit_ground, ball_hit_ceiling) = self._update_ball()
+        (red_state['ball_dist'], red_state['kicked']), (blue_state['ball_dist'], blue_state['kicked']), (ball_hit_ground, ball_hit_ceiling, ball_hit_left_wall, ball_hit_right_wall) = self._update_ball()
         red_state['scored'], blue_state['scored'] = False, False
+        red_state['x'], red_state['y'] = self.red['x']/WALL_X, self.red['y']/CEILING_Y
         game_state['ball_x'], game_state['ball_y'] = self.ball['x']/WALL_X, self.ball['y']/CEILING_Y
 
         if self.ball['y'] < -40:
@@ -178,6 +188,8 @@ class FootballGame:
         game_state['time_steps'] = self.time_steps
         game_state['ball_hit_ground'] = ball_hit_ground
         game_state['ball_hit_ceiling'] = ball_hit_ceiling
+        game_state['ball_hit_left_wall'] = ball_hit_left_wall
+        game_state['ball_hit_right_wall'] = ball_hit_right_wall
 
         return self._get_internal_observation(), (red_state, blue_state, game_state), terminated, truncated, {}
 
