@@ -14,7 +14,108 @@ import matplotlib.pyplot as plt
 from multiagent import FootballMultiAgentEnv
 from policy import *   # brings in atulPolicy, make_policy, etc.
 
+from scipy.signal import savgol_filter
 
+def compute_elo_instability(
+    folder,
+    final_ratings,
+    window=11,
+    poly=3
+):
+    """
+    Computes Elo instability metrics for all checkpoint files in a folder.
+
+    Returns:
+        {
+            "base": <folder name>,
+            "points": [
+                (epoch, filename, elo),
+                ...
+            ],
+            "metrics": {
+                "residual_std": ...,
+                "delta_variance": ...,
+                "mean_abs_delta": ...
+            }
+        }
+    """
+    base = os.path.basename(folder.rstrip("/\\"))
+    points = []   # (epoch, filename, elo)
+
+    # Collect all usable checkpoints
+    for fname in os.listdir(folder):
+        if not fname.endswith(".pth"):
+            continue
+
+        full_label = f"{base}_{fname}"
+        if full_label not in final_ratings:
+            continue
+
+        epoch = extract_epoch_from_filename(fname)
+        if epoch is None:
+            continue
+
+        elo = final_ratings[full_label]
+        points.append((epoch, fname, elo))
+
+    if len(points) == 0:
+        print(f"[WARN] No usable checkpoints in folder: {folder}")
+        return None
+
+    # Sort by epoch
+    points.sort(key=lambda x: x[0])
+
+    # Extract ELO values (sorted)
+    ys = np.array([p[2] for p in points])
+
+    # ----------------------------
+    # 1. Detrended residual noise
+    # ----------------------------
+    # Ensure smoothing window is valid
+    if len(ys) >= window and window % 2 == 1:
+        trend = savgol_filter(ys, window, poly)
+        residuals = ys - trend
+        residual_std = float(np.std(residuals))
+    else:
+        # Not enough points to smooth meaningfully
+        residual_std = None
+
+    # ----------------------------
+    # 2. Delta variance
+    # ----------------------------
+    if len(ys) >= 2:
+        deltas = np.diff(ys)
+        delta_variance = float(np.var(deltas))
+        mean_abs_delta = float(np.mean(np.abs(deltas)))
+    else:
+        delta_variance = None
+        mean_abs_delta = None
+
+    return {
+        "base": base,
+        "points": points,
+        "metrics": {
+            "residual_std": residual_std,
+            "delta_variance": delta_variance,
+            "mean_abs_delta": mean_abs_delta,
+        }
+    }
+
+def compute_instability_for_folders(standings_csv_path, model_folders):
+    # Load ratings
+    final_ratings = {}
+    with open(standings_csv_path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            final_ratings[row["model"]] = float(row["rating"])
+
+    results = {}
+    for folder in model_folders:
+        info = compute_elo_instability(folder, final_ratings)
+        if info is not None:
+            results[info["base"]] = info
+
+    return results
 
 # -------------------------
 # Helper: load policy from checkpoint path
@@ -443,28 +544,6 @@ if __name__ == "__main__":
     ]
     baseline_path = "../checkpoints/elo_tournament_baseline"
 
-    baseline_ratings = run_baseline_tournament(
-        baseline_folder=baseline_path,
-        games_per_pair=100
-    )
-    baseline_ratings = baseline_ratings[0]
-    print(baseline_ratings)
-    
-    updated_ratings = run_incremental_elo_tournament(
-        baseline_ratings=baseline_ratings,    # from previous step
-        model_folders=model_folders,
-        matches_per_model=100,                # exactly what you requested
-        K=16,
-        baseline_path=baseline_path,
-        print_every=10,                      # show only baseline + newest model
-        save_path="results/incremental_elo.csv",
-        device="cpu"
-    )
-
-    print("Final updated ratings (top 20):")
-    for k, v in sorted(updated_ratings.items(), key=lambda x: -x[1])[:20]:
-        print(k, v)
-
 
     # Example baseline run:
     # baseline_folder = "../checkpoints/baseline_models"
@@ -491,9 +570,16 @@ if __name__ == "__main__":
     # )
 
     # Plotting (after running incremental tournament and saving standings csv):
-    # standings_csv_path = "../results/elo_incremental_standings.csv"
-    # plot_elo_vs_epoch(
-    #     standings_csv_path=standings_csv_path,
-    #     model_folders=model_folders,
-    #     save_dir="../results/elo_plots",
-    # )
+    standings_csv_path = "results/incremental_elo.csv"
+    plot_elo_vs_epoch(
+        standings_csv_path=standings_csv_path,
+        model_folders=model_folders,
+        save_dir="../results/elo_plots2",
+    )
+    instability = compute_instability_for_folders("results/incremental_elo.csv", model_folders)
+
+    for base, data in instability.items():
+        print(f"\n=== {base} ===")
+        print("metrics:", data["metrics"])
+        print("first few points:", data["points"][:5])
+

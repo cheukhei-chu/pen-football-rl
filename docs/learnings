@@ -14,3 +14,8 @@ Save current points table regularly
 Plot results (can do later)
 Add atulPolicy and shift
 Start with few and mix new ones in
+
+
+Init to previous model checkpoint
+Play with similar ratings
+Play till convergence
