@@ -552,7 +552,7 @@ import matplotlib.pyplot as plt
 def plot_multiple_elo(
     standings_csv_path,
     model_folders,
-    save_path="../results/elo_plots/misc_vs_score_filter.png",
+    save_path="../results/elo_plots/latent.png",
     filter=False,
 ):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -598,7 +598,7 @@ def plot_multiple_elo(
         xs_new = []
         ys_new = []
         for i,elem in enumerate(xs):
-            if elem <= 1e7:
+            if elem <= 5e8:
                 xs_new.append(xs[i])
                 ys_new.append(ys[i])
         
@@ -680,8 +680,7 @@ if __name__ == "__main__":
     #     "../checkpoints/shoot_left_ppo (without embedding)",
     # ]
     # model_folders = ["../checkpoints/league_ppo_real (score reward) (latent_dims 128 128 128)"]
-    model_folders = ["../checkpoints/league_ppo (misc rewards)", 
-                     "../checkpoints/league_ppo (score reward)"]
+    model_folders = ["../checkpoints/league_ppo_regular_real (score reward) (latent_dims 128 128)", ]
     baseline_path = "../checkpoints/elo_tournament_baseline"
     # ratings = load_model_ratings(baseline_path)
     
@@ -711,7 +710,7 @@ if __name__ == "__main__":
     # )
 
     # Plotting (after running incremental tournament and saving standings csv):
-    standings_csv_path = "results/incremental_elo.csv"
+    standings_csv_path = "results/incremental_elo_4.csv"
     # plot_elo_vs_epoch(
     #     standings_csv_path=standings_csv_path,
     #     model_folders=model_folders,
@@ -725,5 +724,5 @@ if __name__ == "__main__":
     #     print("first few points:", data["points"][:5])
     plot_multiple_elo(standings_csv_path=standings_csv_path,
                       model_folders=model_folders,
-                      filter=True)
+                      filter=False)
 
