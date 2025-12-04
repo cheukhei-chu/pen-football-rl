@@ -413,7 +413,7 @@ def train_league_ppo_real(
         policy_kwargs = kwargs
     else:
         policy_red, checkpoint = policy_from_checkpoint_path(policy)
-        policy_kwargs = checkpoint["policy_kwargs"]
+        policy_kwargs = checkpoint.get("policy_kwargs", {})
 
     optimizer = optim.Adam(policy_red.parameters(), lr=lr)
 
@@ -588,8 +588,8 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo_real(
-        name="league_ppo_regular_real (score reward) (latent_dims 128 128)",
-        policy=("ActorCriticMLPPolicy", {}),
+        name="league_ppo_warmstart_real (score reward)",
+        policy="../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
         total_steps=15_000_000,
         rollout_len=2048,
         print_every=10_000,
