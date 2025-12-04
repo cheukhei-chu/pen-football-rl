@@ -19,3 +19,6 @@ Start with few and mix new ones in
 Init to previous model checkpoint
 Play with similar ratings
 Play till convergence
+
+Reward shaping helps
+league changes also help

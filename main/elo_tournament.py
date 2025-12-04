@@ -430,25 +430,35 @@ def plot_elo_vs_epoch(
 
         print(f"[INFO] Saved Elo-vs-epoch plot: {save_path}")
 
+def load_model_ratings(csv_path):
+    """Return a dict mapping model names → ratings from a CSV file."""
+    ratings = {}
+    with open(csv_path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ratings[row["model"]] = float(row["rating"])
+    return ratings
 # -------------------------
 # Example usage (edit paths, save_path)
 # -------------------------
 if __name__ == "__main__":
-    model_folders = [
-        "../checkpoints/league_ppo (misc rewards)",
-        "../checkpoints/league_ppo (score reward)",
-        "../checkpoints/league_ppo_real (score reward)",
-        "../checkpoints/league_ppo_regular (score reward)",
-        "../checkpoints/shoot_left_ppo (without embedding)",
-    ]
+    # model_folders = [
+    #     "../checkpoints/league_ppo (misc rewards)",
+    #     "../checkpoints/league_ppo (score reward)",
+    #     "../checkpoints/league_ppo_real (score reward)",
+    #     "../checkpoints/league_ppo_regular (score reward)",
+    #     "../checkpoints/shoot_left_ppo (without embedding)",
+    # ]
+    model_folders = ["../checkpoints/league_ppo_real (score reward) (latent_dims 128 128 128)"]
     baseline_path = "../checkpoints/elo_tournament_baseline"
-
-    baseline_ratings = run_baseline_tournament(
-        baseline_folder=baseline_path,
-        games_per_pair=100
-    )
-    baseline_ratings = baseline_ratings[0]
-    print(baseline_ratings)
+    baseline_rating_path = "../results/baseline_ratings.txt"
+    # baseline_ratings = run_baseline_tournament(
+    #     baseline_folder=baseline_path,
+    #     games_per_pair=100
+    # )
+    # baseline_ratings = baseline_ratings[0]
+    #print(baseline_ratings)
+    baseline_ratings = load_model_ratings(baseline_rating_path)
     
     updated_ratings = run_incremental_elo_tournament(
         baseline_ratings=baseline_ratings,    # from previous step
@@ -457,7 +467,7 @@ if __name__ == "__main__":
         K=16,
         baseline_path=baseline_path,
         print_every=10,                      # show only baseline + newest model
-        save_path="results/incremental_elo.csv",
+        save_path="results/incremental_elo_2.csv",
         device="cpu"
     )
 

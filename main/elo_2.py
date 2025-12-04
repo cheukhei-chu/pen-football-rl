@@ -16,6 +16,11 @@ from policy import *   # brings in atulPolicy, make_policy, etc.
 
 from scipy.signal import savgol_filter
 
+naming_dict = {"league_ppo_real (score reward)":"AlphaStar League",
+               "league_ppo (score reward)":"score",
+               "league_ppo (misc rewards)":"{score, move, kick, jump}",
+               }
+
 def compute_elo_instability(
     folder,
     final_ratings,
@@ -531,19 +536,155 @@ def plot_elo_vs_epoch(
 
         print(f"[INFO] Saved Elo-vs-epoch plot: {save_path}")
 
+def load_model_ratings(csv_path):
+    """Return a dict mapping model names → ratings from a CSV file."""
+    ratings = {}
+    with open(csv_path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ratings[row["model"]] = float(row["rating"])
+    return ratings
+
+import os
+import csv
+import matplotlib.pyplot as plt
+
+def plot_multiple_elo(
+    standings_csv_path,
+    model_folders,
+    save_path="../results/elo_plots/misc_vs_score_filter.png",
+    filter=False,
+):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    # --- Load final Elo ratings CSV ---
+    final_ratings = {}
+    with open(standings_csv_path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            final_ratings[row["model"]] = float(row["rating"])
+
+    plt.figure(figsize=(10, 6))
+
+    # --- Process each model folder ---
+    for folder in model_folders:
+        base = os.path.basename(folder.rstrip("/\\"))
+        epoch_list = []
+        elo_list = []
+
+        for fname in os.listdir(folder):
+            if not fname.endswith(".pth"):
+                continue
+
+            full_label = f"{base}_{fname}"  # how tournament names models
+            if full_label not in final_ratings:
+                continue
+
+            epoch = extract_epoch_from_filename(fname)
+            if epoch is None:
+                continue
+
+            epoch_list.append(epoch)
+            elo_list.append(final_ratings[full_label])
+
+        if len(epoch_list) == 0:
+            print(f"[WARN] No usable checkpoints in folder: {folder}")
+            continue
+
+        # Sort by epoch
+        pairs = sorted(zip(epoch_list, elo_list))
+        xs, ys = zip(*pairs)
+
+        xs_new = []
+        ys_new = []
+        for i,elem in enumerate(xs):
+            if elem <= 1e7:
+                xs_new.append(xs[i])
+                ys_new.append(ys[i])
+        
+        if base in naming_dict:
+            base = naming_dict[base]
+        # Plot on shared figure
+        if filter:
+            ys_new = smooth_series(xs_new,ys_new,"moving_average")
+        plt.plot(xs_new, ys_new, label=base)
+
+    # --- Final formatting ---
+    plt.xlabel("Epoch number")
+    plt.ylabel("Final Elo rating")
+    plt.title("Elo vs Epoch")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(save_path)
+    plt.close()
+
+    print(f"[INFO] Saved combined Elo-vs-epoch plot to {save_path}")
+
+def smooth_series(xs, ys, method="moving_average", window=5, polyorder=2, alpha=0.3):
+    """
+    Smooth a 1D series of values.
+
+    Args:
+        xs (list or np.array): x-values (kept unchanged)
+        ys (list or np.array): y-values (to smooth)
+        method (str): "moving_average", "ema", or "savgol"
+        window (int): window size for moving average or Savitzky-Golay
+        polyorder (int): polynomial order for Savitzky-Golay
+        alpha (float): smoothing factor for EMA (0 < alpha < 1)
+
+    Returns:
+        np.array: smoothed y-values
+    """
+    ys = np.array(ys)
+    
+    if method == "moving_average":
+        if window < 1:
+            window = 1
+        cumsum = np.cumsum(np.insert(ys, 0, 0)) 
+        smoothed = (cumsum[window:] - cumsum[:-window]) / window
+        # pad to match original length
+        pad_left = window // 2
+        pad_right = ys.size - smoothed.size - pad_left
+        smoothed = np.pad(smoothed, (pad_left, pad_right), mode='edge')
+        return smoothed
+    
+    elif method == "ema":
+        smoothed = np.zeros_like(ys)
+        smoothed[0] = ys[0]
+        for i in range(1, len(ys)):
+            smoothed[i] = alpha * ys[i] + (1 - alpha) * smoothed[i-1]
+        return smoothed
+    
+    elif method == "savgol":
+        # window must be odd and >= polyorder+2
+        if window % 2 == 0:
+            window += 1
+        window = max(window, polyorder + 2)
+        smoothed = savgol_filter(ys, window_length=window, polyorder=polyorder)
+        return smoothed
+    
+    else:
+        raise ValueError("Unknown method. Choose from 'moving_average', 'ema', 'savgol'.")
+
 # -------------------------
 # Example usage (edit paths, save_path)
 # -------------------------
 if __name__ == "__main__":
-    model_folders = [
-        "../checkpoints/league_ppo (misc rewards)",
-        "../checkpoints/league_ppo (score reward)",
-        "../checkpoints/league_ppo_real (score reward)",
-        "../checkpoints/league_ppo_regular (score reward)",
-        "../checkpoints/shoot_left_ppo (without embedding)",
-    ]
+    # model_folders = [
+    #     "../checkpoints/league_ppo (misc rewards)",
+    #     "../checkpoints/league_ppo (score reward)",
+    #     "../checkpoints/league_ppo_real (score reward)",
+    #     "../checkpoints/league_ppo_regular (score reward)",
+    #     "../checkpoints/shoot_left_ppo (without embedding)",
+    # ]
+    # model_folders = ["../checkpoints/league_ppo_real (score reward) (latent_dims 128 128 128)"]
+    model_folders = ["../checkpoints/league_ppo (misc rewards)", 
+                     "../checkpoints/league_ppo (score reward)"]
     baseline_path = "../checkpoints/elo_tournament_baseline"
-
+    # ratings = load_model_ratings(baseline_path)
+    
 
     # Example baseline run:
     # baseline_folder = "../checkpoints/baseline_models"
@@ -571,15 +712,18 @@ if __name__ == "__main__":
 
     # Plotting (after running incremental tournament and saving standings csv):
     standings_csv_path = "results/incremental_elo.csv"
-    plot_elo_vs_epoch(
-        standings_csv_path=standings_csv_path,
-        model_folders=model_folders,
-        save_dir="../results/elo_plots2",
-    )
-    instability = compute_instability_for_folders("results/incremental_elo.csv", model_folders)
+    # plot_elo_vs_epoch(
+    #     standings_csv_path=standings_csv_path,
+    #     model_folders=model_folders,
+    #     save_dir="../results/elo_plots2",
+    # )
+    # instability = compute_instability_for_folders("results/incremental_elo_2.csv", model_folders)
 
-    for base, data in instability.items():
-        print(f"\n=== {base} ===")
-        print("metrics:", data["metrics"])
-        print("first few points:", data["points"][:5])
+    # for base, data in instability.items():
+    #     print(f"\n=== {base} ===")
+    #     print("metrics:", data["metrics"])
+    #     print("first few points:", data["points"][:5])
+    plot_multiple_elo(standings_csv_path=standings_csv_path,
+                      model_folders=model_folders,
+                      filter=True)
 
