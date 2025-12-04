@@ -353,7 +353,7 @@ class CurriculumMLPPolicyScaled(FootballPolicy):
         for i in range(len(latent_dims)):
             self.nets.append(nn.Linear(dims[i], dims[i+1]))
             self.nets.append(nn.ReLU())
-        self.action_net = nn.Sequential(self.nets)
+        self.action_net = nn.Sequential(*self.nets)
         self.head_left  = nn.Linear(latent_dims[-1], 2)
         self.head_right = nn.Linear(latent_dims[-1], 2)
         self.head_jump  = nn.Linear(latent_dims[-1], 2)
