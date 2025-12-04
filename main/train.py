@@ -559,26 +559,26 @@ def train_league_ppo_real(
 ###############################################################
 
 if __name__ == "__main__":
-    train_drill_ppo(
-        name="misc_drill",
-        policy=("CurriculumMLPPolicy", {}),
-        select_drill=lambda: random.choices([
-            {"drill": "block"},
-            {"drill": "block_nobounce"},
-            {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
-            {"drill": "shoot_right", "par": random.uniform(-1, -40/150)},
-            {"drill": "hit_left_wall", "par": random.uniform(-40/150, 1)},
-            {"drill": "hit_right_wall", "par": random.uniform(-40/150, 1)},
-            {"drill": "volley", "par": random.uniform(-0.9, 0.3)},
-            {"drill": "prepare", "par": random.uniform(-1, 1)},
-        ],
-        [0.1, 0.2, 0.15, 0.15, 0.1, 0.1, 0.1, 0.1],
-        )[0],
-        total_steps=30_000_000,
-        rollout_len=2048,
-        print_every=10_000,
-        save_every=100_000,
-    )
+    # train_drill_ppo(
+    #     name="misc_drill",
+    #     policy=("CurriculumMLPPolicy", {}),
+    #     select_drill=lambda: random.choices([
+    #         {"drill": "block"},
+    #         {"drill": "block_nobounce"},
+    #         {"drill": "shoot_left", "par": random.uniform(-1, -40/150)},
+    #         {"drill": "shoot_right", "par": random.uniform(-1, -40/150)},
+    #         {"drill": "hit_left_wall", "par": random.uniform(-40/150, 1)},
+    #         {"drill": "hit_right_wall", "par": random.uniform(-40/150, 1)},
+    #         {"drill": "volley", "par": random.uniform(-0.9, 0.3)},
+    #         {"drill": "prepare", "par": random.uniform(-1, 1)},
+    #     ],
+    #     [0.1, 0.2, 0.15, 0.15, 0.1, 0.1, 0.1, 0.1],
+    #     )[0],
+    #     total_steps=30_000_000,
+    #     rollout_len=2048,
+    #     print_every=10_000,
+    #     save_every=100_000,
+    # )
     # train_league_ppo(
     #     name="league_ppo_regular (score reward)",
     #     policy=("RegularMLPPolicy", {}),
@@ -587,22 +587,11 @@ if __name__ == "__main__":
     #     print_every=10_000,
     #     save_every=100_000,
     # )
-<<<<<<< HEAD
-    # train_league_ppo(
-    #     name="league_ppo_real (score reward)",
-    #     policy=("CurriculumMLPPolicy", {}),
-    #     total_steps=30_000_000,
-    #     rollout_len=2048,
-    #     print_every=10_000,
-    #     save_every=100_000,
-    # )
-=======
-     train_league_ppo_real(
-        name="league_ppo_real (score reward) (latent_dims 128 128 128)",
-        policy=("CurriculumMLPPolicyScaled", {"latent_dims": [128, 128, 128]}),
-        total_steps=30_000_000,
+    train_league_ppo_real(
+        name="league_ppo_regular_real (score reward) (latent_dims 128 128)",
+        policy=("ActorCriticMLPPolicy", {}),
+        total_steps=15_000_000,
         rollout_len=2048,
         print_every=10_000,
         save_every=100_000,
     )
->>>>>>> 0183046 (scaled checkpoints)
