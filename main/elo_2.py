@@ -598,7 +598,7 @@ def plot_multiple_elo(
         xs_new = []
         ys_new = []
         for i,elem in enumerate(xs):
-            if elem <= 1e7:
+            if elem <= 5e8:
                 xs_new.append(xs[i])
                 ys_new.append(ys[i])
         
