@@ -72,11 +72,11 @@ if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Pen Football - One Player")
-    play_zero_player(
-        "../checkpoints/league_ppo_real (score reward)/checkpoint_6000000.pth",
-        "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
-        )
     # play_zero_player(
-    #     "../checkpoints/league_ppo_real (score reward)/checkpoint_12500000.pth",
-    #     "../checkpoints/league_ppo (misc rewards)/checkpoint_7100000.pth",
+    #     "../checkpoints/league_ppo_real (score reward)/checkpoint_6000000.pth",
+    #     "../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
     #     )
+    play_zero_player(
+        "../checkpoints/league_ppo_real (score reward)/checkpoint_12500000.pth",
+        "../checkpoints/league_ppo (misc rewards)/checkpoint_7100000.pth",
+        )
