@@ -1,0 +1,13 @@
+model,rating,games,wins,draws
+baseline_league_ppo_real (score reward)_checkpoint_12500000.pth,2456.42,1100,944,8
+baseline_league_ppo (misc rewards)_checkpoint_7100000.pth,2421.86,1100,984,4
+baseline_league_ppo (score reward)_checkpoint_22000000.pth,2340.89,1100,863,5
+baseline_league_ppo_regular (score reward)_checkpoint_10100000.pth,2129.18,1100,631,36
+baseline_league_ppo_regular (score reward)_checkpoint_4200000.pth,2060.79,1100,637,11
+baseline_league_ppo_real (score reward) checkpoint_2100000.pth,1905.86,1100,518,24
+baseline_league_ppo (score reward)_checkpoint_3800000.pth,1813.47,1100,497,22
+baseline_league_ppo (misc rewards)_checkpoint_1100000.pth,1807.10,1100,379,36
+baseline_league_ppo_regular (score reward)_checkpoint_1000000.pth,1794.50,1100,384,33
+baseline_league_ppo (misc rewards)_checkpoint_8300000.pth,1695.06,1100,302,85
+baseline_league_ppo (score reward)_checkpoint_12500000.pth,1549.37,1100,220,29
+atulPolicy,1500.00,1100,69,51

@@ -130,7 +130,16 @@ class FootballMultiAgentEnv(gym.Env):
             self.history['red_kicked'] = True
             self.history['min_red_ball_dist'] = min(self.history.get('min_red_ball_dist', float('inf')), red_state['ball_dist'])
 
-        return obs, rewards, terminateds, truncateds, {"reports": reports}
+        result = None
+        if terminateds["__all__"] or truncateds["__all__"]:
+            if red_state["scored"]:
+                result = "red"
+            elif blue_state["scored"]:
+                result = "blue"
+            else:
+                result = "draw"
+
+        return obs, rewards, terminateds, truncateds, {"reports": reports, "result": result}
 
     # -----------------------------------------------------
 
