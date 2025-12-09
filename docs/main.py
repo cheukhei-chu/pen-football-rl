@@ -9,7 +9,7 @@ from pen_football import *
 
 # --- ONNX Configuration ---
 # Ensure this matches the filename inside your docs folder
-ONNX_MODEL_PATH = "league_ppo (misc rewards) checkpoint_7100000.onnx"
+ONNX_MODEL_PATH = "model.onnx"
 
 # --- Global ONNX Session Setup ---
 try:
