@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
+from collections import deque
 from abc import ABC, abstractmethod
 
 # -------------------------
@@ -478,6 +479,250 @@ class ActorCriticMLPPolicy(FootballPolicy):
     def set_setting(self, setting):
         pass
 
+
+class FeudalMarkovPolicy(FootballPolicy):
+    def __init__(self, obs_dim=12, goal_dim=16, hidden_dim=128, horizon=10):
+        super().__init__()
+        self.obs_dim = obs_dim
+        self.goal_dim = goal_dim
+        self.horizon = horizon
+
+        # --- Internal State ---
+        self.internal_step = 0
+
+        # Queue for smoothing the goal (stores last 'horizon' raw slices)
+        self.raw_goal_queue = None
+
+        # The actual goal used by the worker (Average of queue)
+        self.current_goal = None
+
+        # Stores (s_t, g_t) pairs for Intrinsic Reward calculation
+        self.reward_history = deque(maxlen=horizon)
+
+        # Temporary storage for rollout buffer
+        self.last_raw_goal = None
+        self.last_manager_log_prob = None
+
+        # --- SHARED PERCEPTION (s_t) ---
+        self.percept_net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, goal_dim),
+            nn.LayerNorm(goal_dim),
+            nn.Tanh()
+        )
+
+        # --- MANAGER (PPO) ---
+        # Input: Latent State 's' (dim: goal_dim)
+        # Shared Trunk for Manager Policy and Value
+        self.manager_net = nn.Sequential(
+            nn.Linear(goal_dim, hidden_dim),
+            nn.ReLU()
+        )
+
+        # Policy Head (Mean + LogStd)
+        self.manager_mu = nn.Linear(hidden_dim, goal_dim)
+        self.manager_log_std = nn.Parameter(torch.zeros(1, goal_dim) - 0.5)
+
+        # Value Head (Extrinsic Reward) - Corrected to take hidden_dim
+        self.manager_value_head = nn.Linear(hidden_dim, 1)
+
+        # --- WORKER ---
+        self.worker_net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+
+        # Worker Heads: Output Interaction Matrices U
+        self.worker_head_left_U  = nn.Linear(hidden_dim, 2 * goal_dim)
+        self.worker_head_right_U = nn.Linear(hidden_dim, 2 * goal_dim)
+        self.worker_head_jump_U  = nn.Linear(hidden_dim, 2 * goal_dim)
+
+        # Worker Biases b
+        self.worker_head_left_b  = nn.Linear(hidden_dim, 2)
+        self.worker_head_right_b = nn.Linear(hidden_dim, 2)
+        self.worker_head_jump_b  = nn.Linear(hidden_dim, 2)
+
+        # Worker Value Head (Intrinsic Reward)
+        self.worker_value_head = nn.Linear(hidden_dim, 1)
+
+    def _update_manager(self, obs):
+        """
+        Stateful Tick:
+        1. Computes latent state s_t.
+        2. Samples new goal slice from Manager (PPO).
+        3. Updates sliding window queue.
+        4. Updates history for reward calc.
+        """
+        # Initialize queue if needed
+        if self.raw_goal_queue is None:
+             self.raw_goal_queue = torch.zeros(1, self.horizon, self.goal_dim, device=obs.device)
+
+        with torch.no_grad():
+            # 1. Perception
+            s_t = self.percept_net(obs) # (1, goal_dim)
+
+            # 2. Manager PPO Sample
+            x = self.manager_net(s_t)
+            mu = self.manager_mu(x)
+            std = torch.exp(self.manager_log_std)
+            dist = torch.distributions.Normal(mu, std)
+
+            # Sample raw goal slice
+            raw_slice = dist.sample()
+
+            # Save data for the rollout buffer
+            self.last_raw_goal = raw_slice
+            self.last_manager_log_prob = dist.log_prob(raw_slice).sum(dim=-1)
+
+            # Normalize slice for use in Worker/Queue
+            norm_slice = torch.nn.functional.normalize(raw_slice, p=2, dim=1)
+
+            # 3. Update Queue (Shift left, append new)
+            self.raw_goal_queue = torch.cat(
+                [self.raw_goal_queue[:, 1:, :], norm_slice.unsqueeze(1)], dim=1
+            )
+
+            # 4. Calculate Effective Goal (Average)
+            self.current_goal = self.raw_goal_queue.mean(dim=1, keepdim=False)
+
+            # 5. Store History for Intrinsic Reward
+            self.reward_history.append((s_t.detach(), self.current_goal.detach()))
+
+        self.internal_step += 1
+
+    def forward(self, obs: torch.Tensor, goal: torch.Tensor = None):
+        """
+        Pure Forward Pass (Worker Logic).
+        """
+        # 1. Resolve Goal
+        if goal is None:
+            if self.current_goal is None:
+                device = obs.device
+                self.current_goal = torch.zeros(1, self.goal_dim, device=device)
+
+            if self.current_goal.shape[0] != obs.shape[0]:
+                goal = self.current_goal.repeat(obs.shape[0], 1)
+            else:
+                goal = self.current_goal
+
+        # --- DETACH GOAL for Worker Gradient Block ---
+        goal_detached = goal.detach()
+
+        # 2. Worker Network
+        x = self.worker_net(obs)
+        outputs = {}
+
+        if goal_detached.dim() == 2:
+            g_unsq = goal_detached.unsqueeze(-1)
+        else:
+            g_unsq = goal_detached
+
+        # 3. FeUdal Interaction: Logits = (U @ g) + b
+        for name, head_U, head_b in [
+            ("left", self.worker_head_left_U, self.worker_head_left_b),
+            ("right", self.worker_head_right_U, self.worker_head_right_b),
+            ("jump", self.worker_head_jump_U, self.worker_head_jump_b)
+        ]:
+            b = head_b(x)
+            U_flat = head_U(x)
+            U = U_flat.view(obs.shape[0], 2, self.goal_dim)
+
+            interaction = torch.bmm(U, g_unsq).squeeze(-1)
+            outputs[name] = interaction + b
+
+        outputs["value"] = self.worker_value_head(x)
+        return outputs
+
+    def sample_action(self, obs):
+        """
+        Main entry point for Inference/Rollout.
+        Updates internal state, then predicts action.
+        """
+        obs_t = _to_tensor(obs)
+        self._update_manager(obs_t)
+
+        with torch.no_grad():
+            logits = self.forward(obs_t)
+            out = {}
+            for k in ("left", "right", "jump"):
+                dist = torch.distributions.Categorical(logits=logits[k])
+                out[k] = int(dist.sample()[0].item())
+        return out
+
+    def compute_intrinsic_reward(self, next_obs):
+        """
+        Calculates 1/c * sum( Cosine(s_next - s_past, g_past) )
+        """
+        # Convert next_obs to tensor
+        if isinstance(next_obs, np.ndarray):
+            device = self.percept_net[0].weight.device
+            next_obs_t = torch.tensor(next_obs, dtype=torch.float32, device=device).unsqueeze(0)
+        else:
+            next_obs_t = next_obs
+
+        with torch.no_grad():
+            s_next = self.percept_net(next_obs_t)
+
+        if len(self.reward_history) == 0:
+            return 0.0
+
+        reward_sum = 0.0
+
+        # Flatten for vector math
+        s_next_vec = s_next.detach().view(-1)
+
+        for s_past, g_past in self.reward_history:
+            s_past_vec = s_past.view(-1)
+            g_past_vec = g_past.view(-1)
+
+            # Directional alignment: s_{t+1} - s_{t-i} vs g_{t-i}
+            diff = s_next_vec - s_past_vec
+
+            norm_diff = torch.norm(diff)
+            norm_goal = torch.norm(g_past_vec)
+
+            if norm_diff > 1e-6 and norm_goal > 1e-6:
+                dot = torch.dot(diff, g_past_vec)
+                reward_sum += (dot / (norm_diff * norm_goal)).item()
+
+        # Average and Scale
+        return (reward_sum / len(self.reward_history)) * 0.1
+
+    def evaluate_manager(self, obs, raw_goal_slices):
+        """
+        Helper for PPO Update. Re-calculates log_probs for the Manager.
+        """
+        s_t = self.percept_net(obs)
+        x = self.manager_net(s_t)
+        mu = self.manager_mu(x)
+        std = torch.exp(self.manager_log_std)
+
+        dist = torch.distributions.Normal(mu, std)
+
+        log_prob = dist.log_prob(raw_goal_slices).sum(dim=-1)
+        entropy = dist.entropy().sum(dim=-1)
+
+        # Corrected: Value head takes 'x' (hidden_dim)
+        value = self.manager_value_head(x)
+
+        return log_prob, entropy, value
+
+    def reset_state(self):
+        self.internal_step = 0
+        if self.raw_goal_queue is not None:
+            self.raw_goal_queue.zero_()
+        self.current_goal = None
+        self.reward_history.clear()
+        self.last_raw_goal = None
+        self.last_manager_log_prob = None
+
+    def set_setting(self, setting):
+        pass
+
+
 # -------------------------
 # Factory + checkpoint loader
 # -------------------------
@@ -491,6 +736,7 @@ def make_policy(class_name, **kwargs):
         "atulPolicy": atulPolicy,
         "CurriculumMLPPolicyScaled": CurriculumMLPPolicyScaled,
         "ActorCriticMLPPolicy": ActorCriticMLPPolicy,
+        "FeudalMarkovPolicy": FeudalMarkovPolicy,
     }
     if class_name in name_to_class:
         return name_to_class[class_name](**kwargs)

@@ -77,12 +77,20 @@ def rollout(env, policy_red, policy_blue, select_drill,
     steps = 0
     obs = None
 
+    # NEW: Extra storage for Manager data (if Feudal)
+    m_rew_list, m_val_list, m_logp_list, raw_goal_list = [], [], [], []
+    is_feudal = hasattr(policy_red, "_update_manager")
+
     while steps < rollout_len:
 
         # ------ NEW EPISODE ------
         drill = select_drill()
         env.set_setting(drill)
         policy_red.set_setting(drill)
+
+        if is_feudal:
+            policy_red.reset_state()
+
         obs, _ = env.reset()
 
         done = False
@@ -91,6 +99,15 @@ def rollout(env, policy_red, policy_blue, select_drill,
 
             # observation for red
             obs_tensor = torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
+
+            if is_feudal:
+                policy_red._update_manager(obs_tensor)
+                # Capture the PPO data generated during this tick
+                curr_raw_goal = policy_red.last_raw_goal.clone().detach()
+                curr_m_logp   = policy_red.last_manager_log_prob.clone().detach()
+                # We need Manager's value estimate for GAE
+                _, _, m_val_t = policy_red.evaluate_manager(obs_tensor, curr_raw_goal)
+                m_val = m_val_t.item()
 
             logits = policy_red.forward(obs_tensor)
             value = logits["value"].item()
@@ -115,6 +132,20 @@ def rollout(env, policy_red, policy_blue, select_drill,
 
             done = terminated["__all__"] or truncated["__all__"]
 
+            r_ext = rewards["player_red"]
+            r_worker = r_ext # Worker Base
+
+            if is_feudal:
+                # Worker gets Mixed (Extrinsic + Intrinsic)
+                r_int = policy_red.compute_intrinsic_reward(next_obs["player_red"])
+                r_worker += r_int
+
+                # Manager gets Extrinsic Only
+                m_rew_list.append(r_ext)
+                m_val_list.append(m_val)
+                raw_goal_list.append(curr_raw_goal)
+                m_logp_list.append(curr_m_logp)
+
             # store transition
             obs_list.append(obs_tensor)            # list of (1, obs_dim) tensors
             for k in a:
@@ -135,26 +166,40 @@ def rollout(env, policy_red, policy_blue, select_drill,
 
     # ------ BOOTSTRAP VALUE ------
     with torch.no_grad():
-        last_val = policy_red.forward(
+        w_last_val = policy_red.forward(
             torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0)
         )["value"].item()
 
-    return {
-        "obs": obs_list,
-        "acts": act_list,
-        "logp": logp_list,
-        "rew": rew_list,
-        "done": done_list,
-        "val": val_list,
-        "last_val": last_val,
+    # NEW: Manager Bootstrap
+    m_last_val = 0.0
+    if is_feudal:
+        with torch.no_grad():
+            dummy_g = torch.zeros(1, policy_red.goal_dim, device=obs_tensor.device)
+            _, _, m_last_val_t = policy_red.evaluate_manager(torch.tensor(obs["player_red"], dtype=torch.float32).unsqueeze(0), dummy_g)
+            m_last_val = m_last_val_t.item()
+
+    result = {
+        "obs": obs_list, "acts": act_list, "logp": logp_list,
+        "rew": rew_list, "val": val_list, "done": done_list,
+        "last_val": w_last_val
     }
+
+    # NEW: Return Manager data if it exists
+    if is_feudal:
+        result.update({
+            "m_rew": m_rew_list, "m_val": m_val_list,
+            "m_logp": m_logp_list, "raw_goals": raw_goal_list,
+            "m_last_val": m_last_val
+        })
+
+    return result
 
 
 ###############################################################
 # ===================  PPO UPDATE  ========================== #
 ###############################################################
 
-def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns,
+def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns, manager_data=None,
                epochs=10, batch_size=64, clip_ratio=0.2):
     """
     obs: list of (1,obs_dim) tensors OR a stacked tensor (N, obs_dim)
@@ -177,6 +222,13 @@ def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns,
     old_logps = torch.tensor(old_logps, dtype=torch.float32)
     advantages = advantages.clone().detach().requires_grad_(True)
     returns = returns.clone().detach().requires_grad_(True)
+
+    if manager_data:
+        m_obs = obs # Manager sees same obs
+        m_goals = torch.cat(manager_data["raw_goals"], dim=0)
+        m_old_logps = torch.cat(manager_data["m_logp"], dim=0)
+        m_adv = manager_data["m_adv"]
+        m_ret = manager_data["m_ret"]
 
     N = len(returns)
     idxs = np.arange(N)
@@ -203,6 +255,27 @@ def ppo_update(policy, optimizer, obs, actions, old_logps, advantages, returns,
             loss = ppo_loss(
                 policy, obs_b, act_b, old_log_b, adv_b, ret_b, clip_ratio
             )
+
+            if manager_data:
+                m_goals_b = m_goals[batch_idx]
+                m_old_log_b = m_old_logps[batch_idx]
+                m_adv_b = m_adv[batch_idx]
+                m_ret_b = m_ret[batch_idx]
+
+                # Get new stats
+                m_logp_new, m_ent_new, m_val_pred = policy.evaluate_manager(obs_b, m_goals_b)
+                m_val_pred = m_val_pred.squeeze(-1)
+
+                # Standard PPO Ratio
+                m_ratio = torch.exp(m_logp_new - m_old_log_b)
+                m_surr1 = m_ratio * m_adv_b
+                m_surr2 = torch.clamp(m_ratio, 1-clip_ratio, 1+clip_ratio) * m_adv_b
+
+                m_loss_pi = -torch.min(m_surr1, m_surr2).mean()
+                m_loss_v = ((m_ret_b - m_val_pred) ** 2).mean()
+
+                # ADD LOSSES TOGETHER
+                loss += (m_loss_pi + 0.5 * m_loss_v - 0.01 * m_ent_new.mean())
 
             optimizer.zero_grad()
             loss.backward()
@@ -520,9 +593,23 @@ def train_league_ppo_real(
         adv = compute_gae(rewards, values, dones, last_val, gamma, lam)
         ret = adv + torch.tensor(values, dtype=torch.float32)
 
+        manager_data = None
+        if "m_rew" in roll:
+            # roll["m_rew"] contains (Extrinsic Only)
+            m_adv = compute_gae(roll["m_rew"], roll["m_val"], roll["done"], roll["m_last_val"], gamma, lam)
+            m_ret = m_adv + torch.tensor(roll["m_val"], dtype=torch.float32)
+
+            # Pack it up
+            manager_data = {
+                "raw_goals": roll["raw_goals"],
+                "m_logp": roll["m_logp"],
+                "m_adv": m_adv,
+                "m_ret": m_ret
+            }
+
         ppo_update(
             policy_red, optimizer,
-            obs, actions, old_logps, adv, ret,
+            obs, actions, old_logps, adv, ret, manager_data=manager_data,
             epochs=epochs, batch_size=batch_size
         )
 
@@ -588,9 +675,9 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo_real(
-        name="league_ppo_warmstart_real (score reward)",
-        policy="../checkpoints/shoot_left_ppo (without embedding)/checkpoint_2998272.pth",
-        total_steps=15_000_000,
+        name="league_ppo_real_feudal",
+        policy=("FeudalMarkovPolicy", {}),
+        total_steps=30_000_000,
         rollout_len=2048,
         print_every=10_000,
         save_every=100_000,
