@@ -465,7 +465,7 @@ def train_league_ppo_real(
     total_steps=3_000_000, rollout_len=4096,
     lr=3e-4, gamma=0.99, lam=0.95,
     epochs=10, batch_size=256,
-    pool_size=20,
+    pool_size=1000,
     self_play_prob=None,
     print_every=10_000, save_every=50_000,
     eval_win_window=20,         # number of recent matches to track per opponent
@@ -675,10 +675,10 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo_real(
-        name="league_ppo_real_feudal",
-        policy=("FeudalMarkovPolicy", {}),
-        total_steps=30_000_000,
+        name="league_ppo_real_feudal_warmstart",
+        policy="../checkpoints/league_ppo_real_feudal (misc rewards)/checkpoint_29500000.pth",
+        total_steps=300_000_000,
         rollout_len=2048,
         print_every=10_000,
-        save_every=100_000,
+        save_every=1_000_000,
     )

@@ -83,4 +83,4 @@ if __name__ == "__main__":
     # play_one_player("../checkpoints/red_league_test2/football_episode_38000.pth")
     # play_one_player("../checkpoints/league_ppo (misc rewards)/checkpoint_7100000.pth",)
     # play_one_player("../checkpoints/league_ppo_regular_real (score reward) (latent_dims 128 128)/checkpoint_12000000.pth")
-    play_one_player("../checkpoints/league_ppo_real_feudal/checkpoint_29500000.pth")
+    play_one_player("../checkpoints/league_ppo_real_feudal_warmstart/checkpoint_4000000.pth")
