@@ -465,12 +465,13 @@ def train_league_ppo_real(
     total_steps=3_000_000, rollout_len=4096,
     lr=3e-4, gamma=0.99, lam=0.95,
     epochs=10, batch_size=256,
-    pool_size=1000,
+    pool_size=10000,
     self_play_prob=None,
     print_every=10_000, save_every=50_000,
     eval_win_window=20,         # number of recent matches to track per opponent
     difficulty_alpha=2.0,       # skew exponent for weighting (>=1 -> more skew)
     min_opponent_weight=1e-3,   # don't let weight go to zero
+    opponent_pool=[],
 ):
     env = FootballMultiAgentEnv()
 
@@ -491,7 +492,7 @@ def train_league_ppo_real(
     optimizer = optim.Adam(policy_red.parameters(), lr=lr)
 
     # ---------- Opponent pool + bookkeeping ----------
-    opponent_pool = []  # list of checkpoint file paths
+    # opponent_pool = []  # list of checkpoint file paths
     # For each opponent checkpoint path we keep a deque of last eval_win_window results (1 = learner win, 0 = loss)
     win_history = defaultdict(lambda: deque(maxlen=eval_win_window))
 
@@ -533,7 +534,10 @@ def train_league_ppo_real(
 
     def load_opponent_from_path(ckpt_path):
         ckpt = torch.load(ckpt_path, map_location="cpu")
-        opponent = make_policy(ckpt["policy_class"], **ckpt["policy_kwargs"])
+        if "policy_kwargs" in ckpt:
+            opponent = make_policy(ckpt["policy_class"], **ckpt["policy_kwargs"])
+        else:
+            opponent = make_policy(ckpt["policy_class"])
         opponent.load_state_dict(ckpt["policy_state_dict"])
         opponent.eval()
         return opponent
@@ -675,10 +679,19 @@ if __name__ == "__main__":
     #     save_every=100_000,
     # )
     train_league_ppo_real(
-        name="league_ppo_real_feudal_warmstart",
-        policy="../checkpoints/league_ppo_real_feudal (misc rewards)/checkpoint_29500000.pth",
+        name="league_ppo_real_warmstart_experts",
+        policy="../checkpoints/league_ppo (misc rewards)/checkpoint_7100000.pth",
         total_steps=300_000_000,
         rollout_len=2048,
         print_every=10_000,
         save_every=1_000_000,
+        opponent_pool=[
+            *[f"../checkpoints/league_ppo (misc rewards)/checkpoint_{i}00000.pth" for i in range(1, 301)],
+            *[f"../checkpoints/league_ppo (score reward)/checkpoint_{i}00000.pth" for i in range(1, 301)],
+            *[f"../checkpoints/league_ppo_real (score reward)/checkpoint_{i}00000.pth" for i in range(1, 138)],
+            *[f"../checkpoints/league_ppo_regular_real (misc rewards)/checkpoint_{i}00000.pth" for i in range(1, 151)],
+            *[f"../checkpoints/league_ppo_regular_real (misc rewards)/checkpoint_{i}00000.pth" for i in range(1, 151)],
+            *[f"../checkpoints/league_ppo_regular_real (score reward) (latent_dims 128 128)/checkpoint_{i}00000.pth" for i in range(1, 151)],
+            *[f"../checkpoints/shoot_left_ppo (without embedding)/checkpoint_{i*16384}.pth" for i in range(1, 184)],
+        ],
     )
